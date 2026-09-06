@@ -201,6 +201,10 @@ python tests/bench/memory_bench.py --online   # 実際のローカルモデル�
 
 ## ドキュメント
 
+**このプロジェクトを引き継ぐ / 続きを書くなら、まず [CLAUDE.md](CLAUDE.md) を読むこと。**
+現在地・壊してはいけないもの・判断の記録・実測値・次の一手がまとまっている
+（Claude Code のセッションでは自動で読み込まれる）。
+
 - [docs/architecture.md](docs/architecture.md) — 全体構成と、なぜそう作ったか
 - [docs/daemon.md](docs/daemon.md) — 無意識デーモンの動かし方と、対話との譲り合い
 - [docs/models.md](docs/models.md) — モデルの差し替え手順とキャリブレーション
