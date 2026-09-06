@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__NANO_TITLE__</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface:      #fcfcfb;
+    --plane:        #f9f9f7;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --hairline:     #e1e0d9;
+    --border:       rgba(11,11,11,0.10);
+    --self:         #2a78d6;
+    --unconscious:  #eb6834;
+    --world:        #1baf7a;
+    --shadow:       rgba(11,11,11,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface:     #1a1a19;
+      --plane:       #0d0d0d;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --muted:       #898781;
+      --hairline:    #2c2c2a;
+      --border:      rgba(255,255,255,0.10);
+      --self:        #3987e5;
+      --unconscious: #d95926;
+      --world:       #199e70;
+      --shadow:      rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface:     #1a1a19;
+    --plane:       #0d0d0d;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --hairline:    #2c2c2a;
+    --border:      rgba(255,255,255,0.10);
+    --self:        #3987e5;
+    --unconscious: #d95926;
+    --world:       #199e70;
+    --shadow:      rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--plane);
+    color: var(--ink);
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  .stat { color: var(--ink-2); font-size: 12px; }
+  .stat b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+
+  input[type="search"], button, select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 9px;
+  }
+  input[type="search"] { min-width: 200px; }
+  button { cursor: pointer; }
+  button:hover { background: var(--plane); }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+  .controls {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .group { display: flex; gap: 10px; align-items: center; }
+  .group > span:first-child { color: var(--muted); }
+  label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .swatch.diamond { border-radius: 2px; transform: rotate(45deg); }
+  .swatch.square { border-radius: 2px; }
+
+  main { flex: 1; position: relative; display: flex; min-height: 0; }
+  #canvas-wrap { flex: 1; position: relative; background: var(--surface); }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    max-width: 280px;
+    padding: 6px 9px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 2px 10px var(--shadow);
+    font-size: 12px;
+    line-height: 1.45;
+    opacity: 0;
+    transition: opacity .08s;
+  }
+  #tooltip.on { opacity: 1; }
+
+  aside {
+    width: 340px;
+    border-left: 1px solid var(--hairline);
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 16px;
+    display: none;
+  }
+  aside.on { display: block; }
+  aside h2 { font-size: 15px; margin: 0 0 4px; line-height: 1.5; font-weight: 600; }
+  aside .origin-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--ink-2); margin-bottom: 12px;
+  }
+  aside .ctx { color: var(--ink-2); font-size: 13px; line-height: 1.6; margin: 0 0 14px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0 0 14px; font-size: 12px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+  .chip {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--ink-2);
+  }
+  aside h3 { font-size: 11px; color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+  aside ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.7; color: var(--ink-2); }
+  .close { position: absolute; top: 10px; right: 12px; }
+
+  #table-view { flex: 1; overflow: auto; background: var(--surface); display: none; }
+  #table-view.on { display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--hairline); }
+  th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 600; z-index: 1; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--plane); }
+  .origin-mark { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+  .empty { padding: 40px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__NANO_TITLE__</h1>
+  <span class="stat">記憶 <b id="s-shown">0</b>/<b id="s-total">0</b></span>
+  <span class="stat">つながり <b id="s-edges">0</b></span>
+  <span class="stat">エピソード <b id="s-episodes">0</b></span>
+  <span class="stat" id="s-generated"></span>
+  <span class="spacer"></span>
+  <input type="search" id="search" placeholder="記憶を探す（本文・タグ・語）" autocomplete="off">
+  <button id="view-graph" aria-pressed="true">グラフ</button>
+  <button id="view-table" aria-pressed="false">一覧</button>
+  <button id="fit" title="全体を表示">⤢</button>
+  <button id="theme" title="明るさを切り替える">◐</button>
+</header>
+
+<div class="controls">
+  <div class="group">
+    <span>由来</span>
+    <label><input type="checkbox" data-origin="self" checked><span class="swatch" style="background:var(--self)"></span>あなたが話した</label>
+    <label><input type="checkbox" data-origin="unconscious" checked><span class="swatch diamond" style="background:var(--unconscious)"></span>無意識が考えた</label>
+    <label><input type="checkbox" data-origin="world" checked><span class="swatch square" style="background:var(--world)"></span>外界から来た</label>
+  </div>
+  <div class="group">
+    <span>状態</span>
+    <label><input type="checkbox" id="show-cold" checked>薄れた記憶(cold)も出す</label>
+  </div>
+  <div class="group">
+    <span>つながり</span>
+    <label><input type="checkbox" id="show-weak" checked>弱いリンクも出す</label>
+  </div>
+  <div class="group">
+    <span>大きさ=記憶の強さ（半減期）　濃さ=いま思い出しやすいか</span>
+  </div>
+</div>
+
+<main>
+  <div id="canvas-wrap">
+    <canvas id="graph"></canvas>
+    <div id="tooltip"></div>
+  </div>
+  <div id="table-view"></div>
+  <aside id="panel"></aside>
+</main>
+
+<script>
+const RAW = __NANO_DATA__;
+const API = __NANO_API__;
+
+const el = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
+
+let DATA = { nodes: [], edges: [], stats: {} };
+let nodes = [], edges = [], byId = new Map();
+let selected = null, hovered = null, query = "";
+const filters = { self: true, unconscious: true, world: true, cold: true, weak: true };
+
+const view = { x: 0, y: 0, k: 1 };
+let alpha = 1;
+const canvas = el("graph");
+const ctx = canvas.getContext("2d");
+
+/* ---------- データ ---------- */
+function adopt(payload) {
+  DATA = payload;
+  byId = new Map();
+  nodes = payload.nodes.map((n, i) => {
+    const angle = i * 2.399963;          // 黄金角。初期配置を均す
+    const radius = 18 * Math.sqrt(i + 1);
+    const node = Object.assign({}, n, {
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      vx: 0, vy: 0, r: nodeRadius(n),
+    });
+    byId.set(n.id, node);
+    return node;
+  });
+  edges = payload.edges
+    .map((e) => ({ ...e, s: byId.get(e.source), t: byId.get(e.target) }))
+    .filter((e) => e.s && e.t);
+
+  const st = payload.stats || {};
+  el("s-shown").textContent = st.shown ?? nodes.length;
+  el("s-total").textContent = st.notesTotal ?? nodes.length;
+  el("s-edges").textContent = st.edges ?? edges.length;
+  el("s-episodes").textContent = st.episodes ?? 0;
+  el("s-generated").textContent = st.generatedAt ? st.generatedAt.slice(0, 16).replace("T", " ") : "";
+  alpha = 1;
+  renderTable();
+}
+
+function nodeRadius(n) {
+  // 半減期＝記憶の強さ。桁で違うので対数で潰す。
+  const strength = Math.log1p(Math.max(n.halfLife, 0)) / Math.log1p(400);
+  return 4 + 9 * Math.min(1, Math.max(0, strength));
+}
+
+/* ---------- 絞り込み ---------- */
+function matches(n) {
+  if (!filters[n.origin]) return false;
+  if (!filters.cold && n.state === "cold") return false;
+  return true;
+}
+function hit(n) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return (n.content + " " + n.context + " " + n.tags.join(" ") + " " + n.keywords.join(" "))
+    .toLowerCase().includes(q);
+}
+const visibleNodes = () => nodes.filter(matches);
+const visibleEdges = () =>
+  edges.filter((e) => matches(e.s) && matches(e.t) && (filters.weak || e.weight >= 0.5));
+
+/* ---------- 力学 ---------- */
+function step() {
+  const active = visibleNodes();
+  const links = visibleEdges();
+  if (!active.length) return;
+
+  for (const n of active) { n.vx *= 0.86; n.vy *= 0.86; }
+
+  for (let i = 0; i < active.length; i++) {
+    const a = active[i];
+    for (let j = i + 1; j < active.length; j++) {
+      const b = active[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1e-4) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1e-4; }
+      const d = Math.sqrt(d2);
+      const push = (2600 + (a.r + b.r) * 90) / d2;
+      const fx = (dx / d) * push, fy = (dy / d) * push;
+      a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+    }
+  }
+  // つながりの多いノートは、そのぶん一本一本の引きを弱める。
+  // そうしないと、よく繋がった記憶ほど中心で団子になって読めなくなる。
+  const linkCount = new Map();
+  for (const e of links) {
+    linkCount.set(e.s, (linkCount.get(e.s) || 0) + 1);
+    linkCount.set(e.t, (linkCount.get(e.t) || 0) + 1);
+  }
+  for (const e of links) {
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const rest = 110 + 90 * (1 - e.weight);
+    const share = Math.sqrt(Math.max(linkCount.get(e.s), linkCount.get(e.t)));
+    const pull = (d - rest) * 0.02 * (0.4 + e.weight) / share;
+    const fx = (dx / d) * pull, fy = (dy / d) * pull;
+    e.s.vx += fx; e.s.vy += fy; e.t.vx -= fx; e.t.vy -= fy;
+  }
+  for (const n of active) {
+    n.vx -= n.x * 0.0022;
+    n.vy -= n.y * 0.0022;
+    if (n === dragging) continue;
+    n.x += n.vx * alpha;
+    n.y += n.vy * alpha;
+  }
+  alpha = Math.max(0.05, alpha * 0.995);
+}
+
+/* ---------- 描画 ---------- */
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, rect.width * dpr);
+  canvas.height = Math.max(1, rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function originColor(origin) {
+  return css("--" + origin) || css("--self");
+}
+
+function shape(p, n, r) {
+  if (n.origin === "unconscious") {        // ひし形 — 色だけに意味を持たせない
+    p.moveTo(n.sx, n.sy - r); p.lineTo(n.sx + r, n.sy);
+    p.lineTo(n.sx, n.sy + r); p.lineTo(n.sx - r, n.sy); p.closePath();
+  } else if (n.origin === "world") {       // 四角
+    p.rect(n.sx - r * 0.85, n.sy - r * 0.85, r * 1.7, r * 1.7);
+  } else {                                  // 丸
+    p.moveTo(n.sx + r, n.sy);
+    p.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+  }
+}
+
+function draw() {
+  const rect = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.save();
+  ctx.translate(rect.width / 2 + view.x, rect.height / 2 + view.y);
+  ctx.scale(view.k, view.k);
+
+  const active = visibleNodes();
+  for (const n of active) { n.sx = n.x; n.sy = n.y; }
+
+  // つながり。色は乗せない（色数は由来のために取ってある）
+  ctx.lineCap = "round";
+  for (const e of visibleEdges()) {
+    const dim = query && !(hit(e.s) || hit(e.t));
+    ctx.beginPath();
+    ctx.moveTo(e.s.sx, e.s.sy);
+    ctx.lineTo(e.t.sx, e.t.sy);
+    ctx.strokeStyle = css("--muted");
+    ctx.globalAlpha = (dim ? 0.06 : 0.14 + 0.3 * e.weight);
+    ctx.lineWidth = (0.6 + 1.6 * e.weight) / view.k;
+    ctx.setLineDash(e.relation === "contradicts" ? [4 / view.k, 3 / view.k] : []);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (const n of active) {
+    const dim = query && !hit(n);
+    // 想起可能性がそのまま濃さになる。薄れている記憶は薄い。
+    const alphaFor = (dim ? 0.12 : 0.3 + 0.7 * n.retrievability);
+    ctx.globalAlpha = alphaFor;
+    const path = new Path2D();
+    shape(path, n, n.r);
+    ctx.fillStyle = originColor(n.origin);
+    ctx.fill(path);
+
+    if (n.state === "cold") {              // 忘れかけ。輪郭を破線に
+      ctx.globalAlpha = dim ? 0.15 : 0.7;
+      ctx.setLineDash([3 / view.k, 2 / view.k]);
+      ctx.strokeStyle = originColor(n.origin);
+      ctx.lineWidth = 1.2 / view.k;
+      ctx.stroke(path);
+      ctx.setLineDash([]);
+    }
+    if (n.pinned) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--ink");
+      ctx.lineWidth = 1.5 / view.k;
+      ctx.stroke(path);
+    }
+    if (n === selected || n === hovered) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--ink");
+      ctx.lineWidth = 2 / view.k;
+      ctx.beginPath();
+      ctx.arc(n.sx, n.sy, n.r + 4 / view.k, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // ラベル。重なったものは捨てる。全部出すと文字が潰れて一つも読めなくなる。
+  ctx.globalAlpha = 1;
+  const fontSize = 11 / view.k;
+  ctx.font = `${fontSize}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = css("--ink-2");
+  const placed = [];
+  const candidates = active
+    .filter((n) => n === selected || n === hovered || (query && hit(n)) || view.k > 0.4)
+    .sort((a, b) => {
+      const rank = (n) => (n === selected || n === hovered ? 2 : query && hit(n) ? 1 : 0);
+      return rank(b) - rank(a) || b.r - a.r;
+    });
+  for (const n of candidates) {
+    const forced = n === selected || n === hovered;
+    const label = n.content.length > 16 ? n.content.slice(0, 15) + "…" : n.content;
+    const width = ctx.measureText(label).width;
+    const box = {
+      x1: n.sx - width / 2, x2: n.sx + width / 2,
+      y1: n.sy + n.r + 3 / view.k, y2: n.sy + n.r + 3 / view.k + fontSize,
+    };
+    const clash = placed.some((p) => !(box.x2 < p.x1 || box.x1 > p.x2 || box.y2 < p.y1 || box.y1 > p.y2));
+    if (clash && !forced) continue;
+    placed.push(box);
+    ctx.fillText(label, n.sx, box.y2);
+  }
+  ctx.restore();
+}
+
+function fit() {
+  const active = visibleNodes();
+  if (!active.length) return;
+  const rect = canvas.getBoundingClientRect();
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of active) {
+    minX = Math.min(minX, n.x - n.r); maxX = Math.max(maxX, n.x + n.r);
+    minY = Math.min(minY, n.y - n.r); maxY = Math.max(maxY, n.y + n.r);
+  }
+  const pad = 70;
+  const k = Math.min(
+    (rect.width - pad * 2) / Math.max(1, maxX - minX),
+    (rect.height - pad * 2) / Math.max(1, maxY - minY)
+  );
+  view.k = Math.min(2, Math.max(0.2, k));
+  view.x = -((minX + maxX) / 2) * view.k;
+  view.y = -((minY + maxY) / 2) * view.k;
+}
+
+let fitted = false;
+function frame() {
+  step();
+  // 力学が落ち着いた時点で一度だけ全体を画面に収める
+  if (!fitted && alpha < 0.35 && visibleNodes().length) { fit(); fitted = true; }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 当たり判定と操作 ---------- */
+function toWorld(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left - rect.width / 2 - view.x) / view.k,
+    y: (clientY - rect.top - rect.height / 2 - view.y) / view.k,
+  };
+}
+function nodeAt(clientX, clientY) {
+  const p = toWorld(clientX, clientY);
+  let best = null, bestD = Infinity;
+  for (const n of visibleNodes()) {
+    const d = Math.hypot(n.x - p.x, n.y - p.y);
+    if (d < n.r + 6 && d < bestD) { best = n; bestD = d; }
+  }
+  return best;
+}
+
+let dragging = null, panning = null, moved = false;
+canvas.addEventListener("pointerdown", (ev) => {
+  moved = false;
+  const node = nodeAt(ev.clientX, ev.clientY);
+  if (node) { dragging = node; }
+  else { panning = { x: ev.clientX - view.x, y: ev.clientY - view.y }; canvas.classList.add("dragging"); }
+  canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener("pointermove", (ev) => {
+  if (dragging) {
+    const p = toWorld(ev.clientX, ev.clientY);
+    dragging.x = p.x; dragging.y = p.y; dragging.vx = 0; dragging.vy = 0;
+    alpha = Math.max(alpha, 0.35);
+    moved = true;
+    return;
+  }
+  if (panning) {
+    view.x = ev.clientX - panning.x; view.y = ev.clientY - panning.y; moved = true;
+    return;
+  }
+  const node = nodeAt(ev.clientX, ev.clientY);
+  if (node !== hovered) { hovered = node; showTooltip(node, ev); }
+  else if (node) { showTooltip(node, ev); }
+});
+canvas.addEventListener("pointerup", (ev) => {
+  if (dragging && !moved) select(dragging);
+  else if (!dragging && !moved) select(null);
+  dragging = null; panning = null;
+  canvas.classList.remove("dragging");
+});
+canvas.addEventListener("pointerleave", () => { hovered = null; el("tooltip").classList.remove("on"); });
+canvas.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const cx = ev.clientX - rect.left - rect.width / 2;
+  const cy = ev.clientY - rect.top - rect.height / 2;
+  const factor = Math.exp(-ev.deltaY * 0.0016);
+  const next = Math.min(4, Math.max(0.15, view.k * factor));
+  view.x = cx - (cx - view.x) * (next / view.k);
+  view.y = cy - (cy - view.y) * (next / view.k);
+  view.k = next;
+}, { passive: false });
+
+function showTooltip(node, ev) {
+  const tip = el("tooltip");
+  if (!node) { tip.classList.remove("on"); return; }
+  tip.textContent = node.content;
+  const wrap = el("canvas-wrap").getBoundingClientRect();
+  tip.style.left = Math.min(ev.clientX - wrap.left + 12, wrap.width - 292) + "px";
+  tip.style.top = (ev.clientY - wrap.top + 14) + "px";
+  tip.classList.add("on");
+}
+
+/* ---------- 詳細 ---------- */
+const ORIGIN_LABEL = {
+  self: "あなたが話したこと",
+  unconscious: "無意識が考えたこと",
+  world: "外界から入ってきたこと",
+};
+const STATE_LABEL = { active: "active（想起の対象）", cold: "cold（薄れて、明示検索でのみ出る）", merged: "merged（統合済み）" };
+const KIND_LABEL = {
+  fact: "事実", preference: "好み", episode: "出来事",
+  reflection: "気づき", self: "自分について",
+};
+
+async function select(node) {
+  selected = node;
+  const panel = el("panel");
+  if (!node) { panel.classList.remove("on"); return; }
+
+  let detail = node;
+  if (API) {
+    try {
+      const res = await fetch(API + "/note/" + node.id);
+      if (res.ok) detail = await res.json();
+    } catch (err) { /* 取れなくても手元の情報で出す */ }
+  }
+
+  const shapeClass = detail.origin === "unconscious" ? "diamond" : detail.origin === "world" ? "square" : "";
+  const chips = [...(detail.tags || []), ...(detail.keywords || [])]
+    .map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join("");
+  const lineage = (detail.lineage || []).length
+    ? `<h3>ここに統合された記憶</h3><ul>${detail.lineage.map((l) =>
+        `<li>${escapeHtml(l.content)}<span style="color:var(--muted)"> — ${l.created}</span></li>`).join("")}</ul>`
+    : "";
+  const children = (detail.mergedChildren || []).length && !lineage
+    ? `<h3>統合された記憶</h3><ul><li>${detail.mergedChildren.length} 件を吸収しています</li></ul>` : "";
+  const episode = detail.episodeSummary
+    ? `<h3>この記憶が生まれた会話</h3><p class="ctx">${escapeHtml(detail.episodeSummary)}</p>` : "";
+
+  panel.innerHTML = `
+    <button class="close" id="close-panel">✕</button>
+    <h2>${escapeHtml(detail.content)}</h2>
+    <div class="origin-tag">
+      <span class="swatch ${shapeClass}" style="background:var(--${detail.origin})"></span>
+      ${ORIGIN_LABEL[detail.origin]}・${KIND_LABEL[detail.kind] || detail.kind}
+    </div>
+    ${detail.context ? `<p class="ctx">${escapeHtml(detail.context)}</p>` : ""}
+    <dl>
+      <dt>重要度</dt><dd>${detail.importance.toFixed(2)}</dd>
+      <dt>半減期</dt><dd>${detail.halfLife.toFixed(1)} 日</dd>
+      <dt>いま思い出しやすさ</dt><dd>${(detail.retrievability * 100).toFixed(0)}%</dd>
+      <dt>想起された回数</dt><dd>${detail.accessCount}</dd>
+      <dt>つながり</dt><dd>${detail.degree} 本</dd>
+      <dt>状態</dt><dd>${STATE_LABEL[detail.state] || detail.state}</dd>
+      <dt>できた日</dt><dd>${detail.created}</dd>
+      <dt>最後に想起</dt><dd>${detail.lastAccessed}</dd>
+    </dl>
+    ${chips ? `<div class="chips">${chips}</div>` : ""}
+    ${episode}${lineage}${children}
+  `;
+  panel.classList.add("on");
+  el("close-panel").onclick = () => select(null);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------- 一覧（色に頼らずに全部読めるように） ---------- */
+function renderTable() {
+  const rows = visibleNodes().filter(hit)
+    .sort((a, b) => b.importance * b.retrievability - a.importance * a.retrievability);
+  if (!rows.length) {
+    el("table-view").innerHTML = `<p class="empty">該当する記憶がありません。</p>`;
+    return;
+  }
+  el("table-view").innerHTML = `
+    <table>
+      <thead><tr>
+        <th>記憶</th><th>由来</th><th>種類</th>
+        <th class="num">重要度</th><th class="num">半減期(日)</th>
+        <th class="num">思い出しやすさ</th><th class="num">つながり</th><th>状態</th><th>できた日</th>
+      </tr></thead>
+      <tbody>${rows.map((n) => `
+        <tr data-id="${n.id}">
+          <td>${escapeHtml(n.content)}</td>
+          <td><span class="origin-mark"><span class="swatch ${n.origin === "unconscious" ? "diamond" : n.origin === "world" ? "square" : ""}" style="background:var(--${n.origin})"></span>${ORIGIN_LABEL[n.origin]}</span></td>
+          <td>${KIND_LABEL[n.kind] || n.kind}</td>
+          <td class="num">${n.importance.toFixed(2)}</td>
+          <td class="num">${n.halfLife.toFixed(1)}</td>
+          <td class="num">${(n.retrievability * 100).toFixed(0)}%</td>
+          <td class="num">${n.degree}</td>
+          <td>${n.state}</td>
+          <td>${n.created}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+  el("table-view").querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => select(byId.get(Number(tr.dataset.id)));
+  });
+}
+
+/* ---------- UI ---------- */
+el("search").addEventListener("input", (ev) => { query = ev.target.value.trim(); renderTable(); });
+document.querySelectorAll("[data-origin]").forEach((box) => {
+  box.addEventListener("change", () => {
+    filters[box.dataset.origin] = box.checked;
+    alpha = Math.max(alpha, 0.5);
+    fitted = false;
+    renderTable();
+  });
+});
+el("show-cold").addEventListener("change", (ev) => {
+  filters.cold = ev.target.checked; alpha = Math.max(alpha, 0.5); fitted = false; renderTable();
+});
+el("show-weak").addEventListener("change", (ev) => {
+  filters.weak = ev.target.checked; alpha = Math.max(alpha, 0.5);
+});
+el("view-graph").onclick = () => setView("graph");
+el("view-table").onclick = () => setView("table");
+function setView(mode) {
+  const graph = mode === "graph";
+  el("canvas-wrap").style.display = graph ? "" : "none";
+  el("table-view").classList.toggle("on", !graph);
+  el("view-graph").setAttribute("aria-pressed", String(graph));
+  el("view-table").setAttribute("aria-pressed", String(!graph));
+  if (graph) resize();
+}
+el("fit").onclick = () => fit();
+canvas.addEventListener("dblclick", () => fit());
+el("theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.getAttribute("data-theme") === "dark"
+    || (!root.hasAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.setAttribute("data-theme", dark ? "light" : "dark");
+};
+window.addEventListener("resize", resize);
+// 詳細パネルの開閉でも描画領域は変わる。追随しないとノードが楕円に歪む。
+if (window.ResizeObserver) new ResizeObserver(resize).observe(el("canvas-wrap"));
+addEventListener("keydown", (ev) => { if (ev.key === "Escape") select(null); });
+
+/* ---------- 起動 ---------- */
+async function boot() {
+  resize();
+  if (RAW) adopt(RAW);
+  else if (API) {
+    try {
+      const res = await fetch(API + "/graph");
+      adopt(await res.json());
+    } catch (err) {
+      el("table-view").innerHTML = `<p class="empty">記憶を読めませんでした: ${escapeHtml(err)}</p>`;
+    }
+  }
+  if (!nodes.length) {
+    el("canvas-wrap").innerHTML = `<p class="empty">まだ記憶がありません。<br>会話をして <code>nano sleep</code> を通すと、ここに現れます。</p>`;
+  }
+  frame();
+}
+boot();
+</script>
+</body>
+</html>

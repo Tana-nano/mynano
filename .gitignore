@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+# 魂の実体。絶対に共有リポジトリへ入れない。
+soul/
+models/

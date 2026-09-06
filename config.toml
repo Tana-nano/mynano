@@ -1,0 +1,105 @@
+# nano — 設定ファイル
+# ここに書かれた値は「魂の物理法則」。頻繁に変えると人格が揺れるので慎重に。
+
+[paths]
+# 魂のディレクトリ。この1つを丸ごとバックアップすれば、それが全て。
+soul_dir = "soul"
+
+[llm]
+# llama-server (OpenAI互換) を想定。Ollama なら http://localhost:11434/v1
+base_url = "http://localhost:8080/v1"
+model = "local"
+api_key = ""
+timeout_s = 300.0
+temperature = 0.8
+max_tokens = 1024
+# 背景ジョブ（無意識）は決定性を上げて安く回す
+background_temperature = 0.3
+background_max_tokens = 768
+
+[embed]
+base_url = "http://localhost:8081/v1"
+model = "multilingual-e5-large"
+dim = 1024
+# multilingual-e5 系は prefix が必須。他モデルに替えるときは空文字にする。
+query_prefix = "query: "
+passage_prefix = "passage: "
+timeout_s = 120.0
+
+[retrieval]
+# 想起スコア: w_sim*類似度 + w_imp*重要度 + w_rec*想起可能性 + w_con*log1p(次数)
+w_sim = 1.0
+w_imp = 0.35
+w_rec = 0.45
+w_con = 0.15
+candidates = 30      # ベクトル検索で拾う候補数
+top_k = 8            # 最終的にプロンプトへ載せる数
+graph_hops = 1       # 連想展開のホップ数
+graph_fanout = 2     # 1ノートあたり辿るリンク数
+mmr_lambda = 0.7     # 1.0=関連度のみ / 0.0=多様性のみ
+recent_turns = 12    # プロンプトに載せる直近の生ターン数
+
+[decay]
+# retrievability(t) = exp(-(now - last_accessed) / half_life)
+# half_life = base * (1 + span * importance^2)  … 重要度を二乗で効かせる
+base_half_life_days = 2.0
+max_half_life_days = 3650.0
+# 想起されるたび half_life が伸びる（間隔反復）
+recall_gain = 0.8
+# importance が高い記憶は最初から半減期が長い
+importance_span = 200.0
+# これを下回ったら cold 化（＝通常想起から外れる。消えはしない）
+cold_threshold = 0.05
+# cold ノートを統合するときのクラスタ類似度
+# 統合クラスタの近さ。nano calibrate 済みなら sigma のほうが使われる。
+consolidate_similarity = 0.82
+consolidate_sigma = 2.0
+consolidate_min_cluster = 3
+
+[pipeline]
+# 話題の切れ目とみなす条件
+segment_gap_minutes = 45.0
+# 隣接ターンの埋め込み距離がこれを超えたら話題の切れ目とみなす。
+# コサインの絶対値はモデルごとに帯が違うので、nano calibrate 済みなら
+# 実測した分布に対する sigma（平均から何標準偏差か）のほうが使われる。
+segment_drift = 0.55
+segment_drift_sigma = 1.0
+link_top_k = 8             # 新ノートが関係判定を行う近傍数
+link_min_similarity = 0.32 # これ未満の候補はLLMに判定させない（無駄なコール削減）
+link_min_sigma = 1.5       # calibrate 済みならこちら（平均 + 1.5σ を超えた候補だけ）
+# 1記憶が新たに張るリンクの上限。密度を決めるのは実質こちら。
+# しきい値は「近いものが何も無いときに繋がない」ための下限として働く。
+link_max_per_note = 3
+link_judge_budget = 6      # 1エピソードあたりの関係判定コール数の上限
+max_notes_per_episode = 12
+min_segment_events = 6     # これ未満のターン数では話題の切れ目と見なさない
+max_segment_events = 24
+
+[unconscious]
+# 無意識デーモン。`nano daemon` で常駐する。
+enabled = true
+tick_seconds = 20.0
+# 最後の発話からこれだけ経ったら「アイドル」。連想・気づき・忘却はアイドル時にだけ動く。
+idle_seconds = 90.0
+write_delay_seconds = 30.0
+associate_interval_minutes = 15.0
+reflect_interval_minutes = 30.0
+# 前回の reflection 以降に積み上がった重要度がこれを超えたら発火
+reflect_importance_threshold = 3.0
+decay_interval_hours = 24.0
+curate_interval_hours = 168.0
+ingest_interval_minutes = 10.0
+# soul/ 配下。ここにファイルを置くと、無意識が読んで記憶にする。
+inbox_dir = "inbox"
+# soul/log/unconscious.log を何日ぶん残すか（日次でローテーションする）
+log_retain_days = 30
+lease_ttl_seconds = 10.0
+stale_job_seconds = 600.0
+max_job_attempts = 3
+job_retry_seconds = 300.0
+associate_sample = 3
+
+[persona]
+name = "nano"
+constitution_path = "persona/constitution.md"
+probes_path = "persona/probes.yaml"

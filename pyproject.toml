@@ -1,0 +1,31 @@
+[project]
+name = "nano"
+version = "0.1.0"
+description = "Local, permanent AI companion. The memory store is the soul; the model is a replaceable organ."
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# numpy はベクトル検索の高速化にのみ使う。無くても純Pythonで動く。
+fast = ["numpy>=1.26"]
+cli = ["prompt_toolkit>=3.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+nano = "nano.cli.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nano = ["store/*.sql", "viewer/*.html"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
