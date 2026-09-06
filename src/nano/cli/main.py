@@ -7,7 +7,9 @@ import sys
 from pathlib import Path
 
 from .. import calibration as calibration_module
+from .. import doctor as doctor_module
 from ..app import App
+from ..config import load_config
 from ..memory import reembed as reembed_module
 from ..memory.retrieve import recall, recall_explicit
 from ..persona import dataset as dataset_module
@@ -44,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--now", action="store_true", help="アイドルを待たずに動かす（夜間処理を手で走らせる用）"
     )
 
+    sub.add_parser("doctor", help="実機に載せる前の点検（繋がるか・次元・ものさし・基準）")
     sub.add_parser("jobs", help="無意識のジョブキューを見る")
     sub.add_parser("review", help="無意識からの人格変更の提案を承認/却下する")
 
@@ -101,6 +104,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "doctor":
+        if args.offline:
+            # 点検の相手は実機の構成そのもの。--offline で診ても、
+            # スタブが健康だと報告されるだけで何の役にも立たない。
+            print(
+                "doctor は実機の構成を診るものなので --offline とは併用できません。",
+                file=sys.stderr,
+            )
+            return 2
+        # App を組み立てない。埋め込みが食い違っていると App.build は起動を止めるが、
+        # まさにその状態を診るための道具なので、止まってしまっては役に立たない。
+        report = doctor_module.run(load_config(args.config))
+        print(report.render())
+        return 1 if report.failed else 0
+
     holder = "daemon" if args.command == "daemon" else "chat"
     try:
         app = App.create(

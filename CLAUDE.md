@@ -29,7 +29,7 @@
 | **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。**QLoRA はこれから** |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 6,100 行 / テスト約 2,800 行 / **181 件すべてオフラインで通る**
+- コード約 6,300 行 / テスト約 2,900 行 / **188 件すべてオフラインで通る**
 - ブランチ: `claude/load-and-execute-cfjy3q`（前: `claude/local-persistent-ai-companion-hvbwap`）
 
 ### まだ一度もやっていないこと（重要）
@@ -86,6 +86,7 @@ src/nano/
 ├── gate.py           InferenceGate（プロセス内）/ SharedInferenceGate（プロセス間）
 ├── calibration.py    そのモデルの類似度分布を実測し、しきい値をσ単位にする
 ├── offline.py        GPU無しで全系を通すスタブLLM。**テストの土台**
+├── doctor.py         実機に載せる前の点検。何も直さない（直し方だけ出す）
 ├── logs.py           デーモンのログ。日次ローテーション（常駐側が持たないと成立しない）
 ├── store/            記憶ストア。db / events / episodes / notes / graph / entities
 │                     / state / jobs / proposals / identity / stars / archive / schema.sql
@@ -110,7 +111,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 181件
+pytest                                          # 188件
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -120,7 +121,7 @@ python -m nano calibrate    # 初回必須。飛ばすと絶対しきい値の�
 python -m nano chat
 ```
 
-主なコマンド: `chat` `daemon` `jobs` `review` `sleep` `decay` `recall` `graph`
+主なコマンド: `chat` `daemon` `doctor` `jobs` `review` `sleep` `decay` `recall` `graph`
 `calibrate` `reembed` `probe` `stars` `dataset` `state` `stats` `export` `backup`
 `chat` の中では `/why` `/recall` `/focus` `/again` `/star` `/avoid` `/unstar` `/stars`
 `/sleep` `/decay` `/stats`
@@ -213,6 +214,7 @@ spaCy の平均語ベクトルは**帯の位置は e5 系と同じだが、関�
 ユーザーの手元でしかできない。見せてもらうべき出力:
 
 ```bash
+python -m nano doctor      # まずこれ。繋がるか・次元・ものさし・基準をまとめて診る
 python -m nano calibrate   # 平均・σ・実効しきい値
 python -m nano stats       # links_per_note（10を超えていないか）
 python -m nano graph       # ハリボールになっていないか

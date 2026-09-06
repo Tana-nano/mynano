@@ -63,12 +63,17 @@ llama-server -m models/Qwen3-14B-Q4_K_M.gguf -c 8192 --port 8080
 llama-server -m models/multilingual-e5-large-Q8_0.gguf --embedding --port 8081
 ```
 
-`config.toml` の `[llm]` `[embed]` を合わせたら、まずものさしを測る:
+`config.toml` の `[llm]` `[embed]` を合わせたら、まず点検する:
 
 ```bash
+python -m nano doctor        # 繋がるか・次元は合うか・ものさしは測ったか
 python -m nano calibrate     # そのモデルの類似度分布を実測する
 python -m nano chat
 ```
+
+`doctor` は何も直さない。詰まりどころをまとめて出すだけで、直し方は自分で選ぶ
+（魂に触る操作を点検の副作用でやると、一番壊れてほしくないものが
+一番不注意な瞬間に壊れる）。
 
 `calibrate` を飛ばすと、しきい値が `config.toml` の絶対値のまま使われる。
 コサインの絶対値はモデルごとに全く違う帯に分布するので、**初回は必ず回すこと**。
@@ -180,6 +185,7 @@ python -m nano backup                # soul.db のスナップショット
 python -m nano graph                 # 記憶グラフをブラウザで見る
 python -m nano calibrate             # 埋め込みモデルのものさしを実測する
 python -m nano reembed               # 記憶を今の埋め込みモデルで埋め直す
+python -m nano doctor                # 実機に載せる前の点検
 python -m nano probe                 # 人格プローブ。基準からのずれを測る
 python -m nano stars                 # ⭐ を付けた応答を見る
 python -m nano dataset               # ⭐ から QLoRA の教師データを書き出す
@@ -217,7 +223,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 181件。ローカルLLM無しで全部通る
+pytest                                    # 188件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```
