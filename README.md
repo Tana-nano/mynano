@@ -22,7 +22,7 @@
 | **M0 骨格** | ✅ 設定 / SQLite / llama-server クライアント / 埋め込み / 推論ゲート |
 | **M1 記憶コア＋CUI** | ✅ 書き込みパイプライン・想起・忘却・人格プロンプト・CUI・記憶ベンチ |
 | **M2 無意識デーモン** | ✅ 常駐して記憶化・連想・気づき・忘却・整理を回す。外界の取り込みと人格変更の承認フローつき |
-| M3 グラフ可視化 | ⬜ Obsidian 風の記憶グラフビュー |
+| **M3 グラフ可視化** | ✅ 記憶グラフのビューア。誰が作った記憶かで色分け、単体HTMLに書き出せる |
 | M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）は動く。QLoRA はこれから |
 | M5 偏在化 | ⬜ 音声・アバター・自発発話・外部情報の取り込み |
 
@@ -111,6 +111,18 @@ nano> …
 会話が記憶になるのは書き込みパイプラインを通ってからで、
 デーモンが動いていればアイドル時に勝手に走る。止めているなら `/sleep` で手動で。
 
+### 記憶を見る
+
+```bash
+python -m nano graph                          # ブラウザで開く
+python -m nano graph --export soul/graph.html # 単体のHTMLに書き出す
+```
+
+丸はあなたが話したこと、ひし形は**無意識が考えたこと**、四角は外界から来たもの。
+大きさは記憶の強さ（半減期）、濃さはいま思い出しやすいか。
+書き出したファイルは外部を一切読み込まないので、ネットが無くても10年後でも開ける。
+詳しくは [docs/graph.md](docs/graph.md)。
+
 ### 外界から取り込む
 
 `soul/inbox/` にテキストファイル（`.txt` `.md` `.json` `.log` `.csv`）を置くと、
@@ -136,6 +148,7 @@ python -m nano sleep                 # 未処理の会話を記憶に変える
 python -m nano decay                 # 忘却（cold化と統合）
 python -m nano export                # ノートを Markdown に書き出す
 python -m nano backup                # soul.db のスナップショット
+python -m nano graph                 # 記憶グラフをブラウザで見る
 python -m nano calibrate             # 埋め込みモデルのものさしを実測する
 python -m nano reembed               # 記憶を今の埋め込みモデルで埋め直す
 python -m nano probe                 # 人格プローブ。基準からのずれを測る
@@ -171,7 +184,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 112件。ローカルLLM無しで全部通る
+pytest                                    # 133件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```
@@ -191,6 +204,7 @@ python tests/bench/memory_bench.py --online   # 実際のローカルモデル�
 - [docs/architecture.md](docs/architecture.md) — 全体構成と、なぜそう作ったか
 - [docs/daemon.md](docs/daemon.md) — 無意識デーモンの動かし方と、対話との譲り合い
 - [docs/models.md](docs/models.md) — モデルの差し替え手順とキャリブレーション
+- [docs/graph.md](docs/graph.md) — 記憶グラフの見方
 - [docs/memory-model.md](docs/memory-model.md) — スキーマ・想起スコア・忘却曲線
 - [docs/persona.md](docs/persona.md) — 人格3層とドリフト計測
 - [docs/prior-art.md](docs/prior-art.md) — 既出の研究・実装と、何を借りて何を借りなかったか

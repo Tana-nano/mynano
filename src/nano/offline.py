@@ -195,7 +195,9 @@ class OfflineLLM:
         return {
             "insights": [
                 {
-                    "content": f"最近は「{keywords_of(' '.join(items), 3)}」に関する話が多い",
+                    "content": "最近は「"
+                    + "・".join(keywords_of(" ".join(items), 3))
+                    + "」に関する話が多い",
                     "importance": 0.5,
                     "evidence": [],
                 }

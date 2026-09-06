@@ -24,7 +24,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nano = ["store/*.sql", "memory/prompts/*.txt"]
+nano = ["store/*.sql", "viewer/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]

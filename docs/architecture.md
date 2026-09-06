@@ -51,6 +51,7 @@
 | `nano/memory/retrieve.py` | 想起（スコアリング・グラフ展開・MMR） |
 | `nano/memory/decay.py` | 忘却（半減期・cold化・統合） |
 | `nano/unconscious/` | 常駐デーモンと、そこで回る仕事（`write` `associate` `reflect` `decay` `curate` `ingest`） |
+| `nano/viewer/` | 記憶グラフのデータ組み立て・HTML・ローカルサーバー（依存ゼロ、外部読み込みなし） |
 | `nano/persona/` | システムプロンプト構築、人格プローブ、ドリフト計測 |
 | `nano/app.py` | 全部を束ねる。CUI もデーモンも将来のUIもここを入口にする |
 | `nano/offline.py` | GPU無しで全系を通すためのスタブLLM |

@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from .. import calibration as calibration_module
 from ..app import App
 from ..memory import reembed as reembed_module
 from ..memory.retrieve import recall, recall_explicit
 from ..persona import drift as drift_module
-from ..store import archive, entities as entities_store, identity as identity_store
+from ..store import archive, entities as entities_store, identity as identity_store  # noqa: E501
 from ..store import jobs as jobs_store
 from ..store import proposals as proposals_store, state as state_store
 from ..store.db import to_iso
 from ..unconscious.daemon import Daemon
+from ..viewer import data as graph_data
+from ..viewer import page as graph_page
+from ..viewer import server as graph_server
 from . import chat as chat_cli
 
 
@@ -51,6 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     reembed = sub.add_parser("reembed", help="記憶を今の埋め込みモデルで埋め直す")
     reembed.add_argument("--yes", action="store_true", help="確認を飛ばす")
+
+    graph = sub.add_parser("graph", help="記憶グラフを見る（ブラウザ）")
+    graph.add_argument("--export", metavar="FILE", help="サーバーを立てず、単体のHTMLに書き出す")
+    graph.add_argument("--port", type=int, default=graph_server.DEFAULT_PORT)
+    graph.add_argument("--host", default="127.0.0.1")
+    graph.add_argument("--limit", type=int, default=graph_data.DEFAULT_LIMIT,
+                       help="描く記憶の上限。多すぎると読めなくなる")
+    graph.add_argument("--no-open", action="store_true", help="ブラウザを開かない")
 
     sub.add_parser("export", help="ノートを Markdown に書き出す")
     sub.add_parser("backup", help="soul.db のスナップショットを取る")
@@ -185,6 +197,20 @@ def _dispatch(app: App, args) -> int:
         print(report)
         print("分布も変わっているので、続けて `nano calibrate` を回してください。")
         return 0
+
+    if args.command == "graph":
+        if args.export:
+            payload = graph_data.build(app.db, app.config.decay, limit=args.limit)
+            target = Path(args.export)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            html = graph_page.render(f"{app.config.persona.name} の記憶", payload=payload.to_dict())
+            target.write_text(html, encoding="utf-8")
+            print(f"{payload.stats['shown']} 件の記憶を {target} に書き出しました。")
+            print("このファイル1枚で完結しています。外部の読み込みはありません。")
+            return 0
+        return graph_server.serve(
+            app, host=args.host, port=args.port, limit=args.limit, open_browser=not args.no_open
+        )
 
     if args.command == "export":
         count = archive.export_notes(app.db, app.config.export_dir)
