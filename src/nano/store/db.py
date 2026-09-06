@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 
 def now() -> float:
@@ -35,6 +35,8 @@ class Database:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        # 対話とデーモンの2プロセスが同じ soul.db を触る。書き込みの衝突は待って解決する。
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.migrate()
 
     def migrate(self) -> None:
@@ -60,8 +62,14 @@ class Database:
         return None if row is None else row[0]
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
-        self.conn.execute("BEGIN")
+    def transaction(self, immediate: bool = False) -> Iterator[sqlite3.Connection]:
+        """immediate=True は最初から書き込みロックを取る。
+
+        ジョブの取り合いやリースの奪取など、read-modify-write を
+        別プロセスと競う場面では必ず immediate を使うこと。
+        遅延ロックだと両者が読んでから両者が書こうとして片方が失敗する。
+        """
+        self.conn.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
         try:
             yield self.conn
         except BaseException:

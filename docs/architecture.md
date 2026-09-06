@@ -43,11 +43,12 @@
 | `nano/llm.py` | OpenAI互換エンドポイントのクライアント。ストリーミング・中断・JSON抽出＋1回だけの修復 |
 | `nano/embed.py` | 埋め込み。`ServerEmbedder`（e5のprefix対応）と `HashEmbedder`（オフライン用の決定的スタブ） |
 | `nano/vectors.py` | ベクトル演算と永続表現（float32のBLOB）。numpy があれば使い、無ければ純Python |
-| `nano/gate.py` | `InferenceGate`。1枚のGPUを意識と無意識で譲り合う |
+| `nano/gate.py` | `InferenceGate`（プロセス内）と `SharedInferenceGate`（プロセス間）。1枚のGPUを意識と無意識で譲り合う |
 | `nano/store/` | 記憶ストア。`db` `events` `episodes` `notes` `graph` `entities` `state` `archive` |
 | `nano/memory/pipeline.py` | 書き込み（生ログ → 記憶） |
 | `nano/memory/retrieve.py` | 想起（スコアリング・グラフ展開・MMR） |
 | `nano/memory/decay.py` | 忘却（半減期・cold化・統合） |
+| `nano/unconscious/` | 常駐デーモンと、そこで回る仕事（`write` `associate` `reflect` `decay` `curate` `ingest`） |
 | `nano/persona/` | システムプロンプト構築、人格プローブ、ドリフト計測 |
 | `nano/app.py` | 全部を束ねる。CUI もデーモンも将来のUIもここを入口にする |
 | `nano/offline.py` | GPU無しで全系を通すためのスタブLLM |
@@ -55,7 +56,7 @@
 ## InferenceGate — 「無意識は意識に譲る」の実装
 
 VRAM 8〜16GB では、対話用モデルと背景ジョブ用モデルを同時に常駐できない。
-そこで推論はすべて `InferenceGate` を通す。
+そこで推論はすべてゲートを通す。
 
 - 対話は `PRIORITY_CHAT`（0）、背景ジョブは `PRIORITY_BACKGROUND`（10）
 - 高優先度の要求が来ると、占有中の低優先度ジョブの `CancelToken` が立つ
@@ -63,6 +64,14 @@ VRAM 8〜16GB では、対話用モデルと背景ジョブ用モデルを同時
 - 中断されたジョブはキューに戻る（＝考えかけたことは、あとで考え直される）
 
 比喩ではなく、これが実装上の「無意識」の定義になっている。
+
+デーモン（M2）は `nano chat` とは**別プロセス**なので、threading のロックでは届かない。
+`SharedInferenceGate` が `soul.db` の `model_lease`（1行だけの表）をリースとして使い、
+プロセス内の排他の外側にプロセス間の排他を重ねている。保持者が死んでも
+リースの期限切れ（10秒）でモデルは戻ってくる。
+
+ファイルロックにしないのは `fcntl` が Windows で使えないため。
+常駐先が Windows である以上、SQLite で完結させるほうが移植性が高い。
 
 ## 書き込みパイプライン
 
@@ -96,4 +105,5 @@ VRAM 8〜16GB では、対話用モデルと背景ジョブ用モデルを同時
 - **セッション内**: 直近ターン（既定12）をそのままメッセージに積む
 - **セッション間**: 記憶。ただし会話が記憶になるのは書き込みパイプラインを通ってから
 
-M1 では `/sleep` か終了時に走る。M2 のデーモンが入るとアイドル時に自動で走り、この差は見えなくなる。
+M2 のデーモンがアイドル時に自動で走らせるので、この差は普段は見えない。
+デーモンを止めているときは `/sleep` か `nano sleep` で手動で走らせる。

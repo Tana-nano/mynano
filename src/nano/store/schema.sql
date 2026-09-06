@@ -128,3 +128,45 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at   REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS jobs_ready ON jobs (status, run_after, priority);
+
+-- ============================================================
+-- M2: 無意識デーモン
+-- ============================================================
+
+-- 8. プロセス間の推論ゲート。行はこの1行しか存在しない。
+--    対話(nano chat)とデーモンは別プロセスなので、threading のロックでは届かない。
+--    GPUは1枚しかないので、ここで奪い合いを調停する。
+CREATE TABLE IF NOT EXISTS model_lease (
+    id                INTEGER PRIMARY KEY CHECK (id = 1),
+    holder            TEXT NOT NULL DEFAULT '',
+    priority          INTEGER NOT NULL DEFAULT 99,
+    acquired_at       REAL NOT NULL DEFAULT 0,
+    expires_at        REAL NOT NULL DEFAULT 0,   -- 保持者が死んでも期限切れで回収される
+    preempt_requested INTEGER NOT NULL DEFAULT 0 -- 1 = 高優先度が待っている。退去せよ
+);
+INSERT OR IGNORE INTO model_lease(id) VALUES (1);
+
+-- 9. 人格に触れる変更の提案。
+--    無意識は identity / user_model を「書き換える」のではなく「提案する」。
+--    気づかないうちに別人になっていることを防ぐための、構造上の歯止め。
+CREATE TABLE IF NOT EXISTS proposals (
+    id             INTEGER PRIMARY KEY,
+    created_at     REAL NOT NULL,
+    target         TEXT NOT NULL,                 -- identity | user_model
+    current_value  TEXT NOT NULL DEFAULT '',
+    proposed_value TEXT NOT NULL,
+    rationale      TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL DEFAULT 'pending',  -- pending | accepted | rejected
+    decided_at     REAL,
+    decided_by     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS proposals_pending ON proposals (status, created_at);
+
+-- 10. 取り込み済みファイル。同じものを二度記憶しないため。
+CREATE TABLE IF NOT EXISTS ingested_files (
+    path        TEXT PRIMARY KEY,
+    size        INTEGER NOT NULL,
+    mtime       REAL NOT NULL,
+    digest      TEXT NOT NULL,
+    ingested_at REAL NOT NULL
+);

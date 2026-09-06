@@ -40,16 +40,26 @@ def _importance(text: str) -> float:
     return round(min(0.95, score), 2)
 
 
+# 記憶の材料になる発話。ユーザーが話したことと、外界から入ってきたもの。
+# コンパニオン自身の相槌は材料にしない（自分の言葉を事実として覚えないため）。
+_SOURCE_SPEAKERS = ("ユーザー", "外界")
+
+
 def _user_lines(transcript: str) -> list[str]:
     lines: list[str] = []
     for raw in transcript.splitlines():
         match = _SPEAKER.match(raw.strip())
         if match is None:
+            # 外界から取り込んだファイルは複数行に渡る。話者行に続く行も拾う。
+            if lines and raw.strip():
+                lines.append(raw.strip())
             continue
         speaker, content = match.group(1).strip(), match.group(2).strip()
-        if speaker == "ユーザー" and content:
+        if speaker in _SOURCE_SPEAKERS and content:
             lines.append(content)
-    return lines
+        elif speaker not in _SOURCE_SPEAKERS:
+            lines.append("")  # 相槌で文脈を区切る
+    return [line for line in lines if line]
 
 
 def _sentences(text: str) -> list[str]:
@@ -93,6 +103,8 @@ class OfflineLLM:
         max_tokens: int | None = None,
         cancel: CancelToken | None = None,
     ) -> Any:
+        if cancel is not None:
+            cancel.raise_if_cancelled()
         payload = self._dispatch(task, messages)
         return json.loads(payload) if isinstance(payload, str) else payload
 
@@ -206,3 +218,48 @@ class OfflineLLM:
         if recalled:
             return f"（オフライン応答）{user} — 思い出したこと: {recalled[0]}"
         return f"（オフライン応答）{user}"
+
+
+def _offline_associate(self, messages) -> dict:
+    """並んだ記憶のうち、文字の重なりが大きい2件だけを繋ぐ。"""
+    content = self._last_user(messages)
+    entries = re.findall(r"\[(\d+)\] (.+)", content)
+    if len(entries) < 2:
+        return {"related": False, "pairs": [], "insight": None, "importance": 0.3}
+    best, best_overlap = None, 0
+    for index, (left_id, left_text) in enumerate(entries):
+        for right_id, right_text in entries[index + 1 :]:
+            overlap = len(set(keywords_of(left_text, 20)) & set(keywords_of(right_text, 20)))
+            if overlap > best_overlap:
+                best, best_overlap = (int(left_id), int(right_id)), overlap
+    if best is None or best_overlap == 0:
+        return {"related": False, "pairs": [], "insight": None, "importance": 0.3}
+    return {
+        "related": True,
+        "pairs": [{"a": best[0], "b": best[1], "relation": "similar", "weight": 0.5}],
+        "insight": f"記憶#{best[0]}と#{best[1]}には共通する話題がある",
+        "importance": 0.4,
+    }
+
+
+def _offline_resolve_contradiction(self, messages) -> dict:
+    return {"verdict": "unclear", "reason": "オフラインスタブは判断しない"}
+
+
+def _offline_curate_state(self, messages) -> dict:
+    content = self._last_user(messages)
+    items = [line[2:] for line in content.splitlines() if line.startswith("- ")]
+    focus = items[-1] if items else ""
+    return {
+        "current_focus": focus[:60],
+        "mood": "平常",
+        # 人格の提案は滅多に出さない。オフラインでは常に出さない。
+        "identity_proposal": None,
+        "user_model_proposal": None,
+        "rationale": "",
+    }
+
+
+OfflineLLM._task_associate = _offline_associate
+OfflineLLM._task_resolve_contradiction = _offline_resolve_contradiction
+OfflineLLM._task_curate_state = _offline_curate_state

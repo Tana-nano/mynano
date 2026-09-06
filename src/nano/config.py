@@ -75,6 +75,28 @@ class PipelineConfig:
 
 
 @dataclass
+class UnconsciousConfig:
+    enabled: bool = True
+    tick_seconds: float = 20.0
+    # 最後の発話からこれだけ経ったら「アイドル」。連想や忘却はアイドル時にだけ動く。
+    idle_seconds: float = 90.0
+    write_delay_seconds: float = 30.0
+    associate_interval_minutes: float = 15.0
+    reflect_interval_minutes: float = 30.0
+    # 前回の reflection 以降に積み上がった重要度がこれを超えたら発火（Generative Agents 方式）
+    reflect_importance_threshold: float = 3.0
+    decay_interval_hours: float = 24.0
+    curate_interval_hours: float = 168.0
+    ingest_interval_minutes: float = 10.0
+    inbox_dir: str = "inbox"
+    lease_ttl_seconds: float = 10.0
+    stale_job_seconds: float = 600.0
+    max_job_attempts: int = 3
+    job_retry_seconds: float = 300.0
+    associate_sample: int = 3
+
+
+@dataclass
 class PersonaConfig:
     name: str = "nano"
     constitution_path: str = "persona/constitution.md"
@@ -90,6 +112,7 @@ class Config:
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     decay: DecayConfig = field(default_factory=DecayConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    unconscious: UnconsciousConfig = field(default_factory=UnconsciousConfig)
     persona: PersonaConfig = field(default_factory=PersonaConfig)
 
     # --- 派生パス。魂ディレクトリ配下は「これ一式で全て」になるよう閉じている ---
@@ -116,6 +139,11 @@ class Config:
         return self.soul_dir / "backup"
 
     @property
+    def inbox_dir(self) -> Path:
+        """外界からの取り込み口。ここに置いたファイルを無意識が記憶にする。"""
+        return self.soul_dir / self.unconscious.inbox_dir
+
+    @property
     def constitution_path(self) -> Path:
         return self._resolve(self.persona.constitution_path)
 
@@ -128,7 +156,14 @@ class Config:
         return path if path.is_absolute() else self.root / path
 
     def ensure_dirs(self) -> None:
-        for directory in (self.soul_dir, self.archive_dir, self.export_dir, self.backup_dir):
+        for directory in (
+            self.soul_dir,
+            self.archive_dir,
+            self.export_dir,
+            self.backup_dir,
+            self.inbox_dir,
+            self.inbox_dir / "processed",
+        ):
             directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -158,5 +193,6 @@ def load_config(path: str | Path | None = None) -> Config:
         retrieval=_build(RetrievalConfig, raw.get("retrieval", {})),
         decay=_build(DecayConfig, raw.get("decay", {})),
         pipeline=_build(PipelineConfig, raw.get("pipeline", {})),
+        unconscious=_build(UnconsciousConfig, raw.get("unconscious", {})),
         persona=_build(PersonaConfig, raw.get("persona", {})),
     )

@@ -8,8 +8,10 @@ import sys
 from ..app import App
 from ..memory.retrieve import recall, recall_explicit
 from ..persona import drift as drift_module
-from ..store import archive, entities as entities_store, state as state_store
+from ..store import archive, entities as entities_store, jobs as jobs_store
+from ..store import proposals as proposals_store, state as state_store
 from ..store.db import to_iso
+from ..unconscious.daemon import Daemon
 from . import chat as chat_cli
 
 
@@ -25,6 +27,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     chat = sub.add_parser("chat", help="対話する")
     chat.add_argument("--session", default=None)
+
+    daemon = sub.add_parser("daemon", help="無意識を常駐させる")
+    daemon.add_argument("--once", action="store_true", help="1 tick だけ動かして終わる")
+    daemon.add_argument("--verbose", action="store_true", help="することが無くても喋る")
+    daemon.add_argument(
+        "--now", action="store_true", help="アイドルを待たずに動かす（夜間処理を手で走らせる用）"
+    )
+
+    sub.add_parser("jobs", help="無意識のジョブキューを見る")
+    sub.add_parser("review", help="無意識からの人格変更の提案を承認/却下する")
 
     sub.add_parser("sleep", help="未処理の会話を記憶に変える（書き込みパイプライン）")
     sub.add_parser("decay", help="忘却処理（cold化と統合）")
@@ -49,7 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    app = App.create(config_path=args.config, offline=args.offline)
+    holder = "daemon" if args.command == "daemon" else "chat"
+    app = App.create(config_path=args.config, offline=args.offline, holder=holder)
     try:
         return _dispatch(app, args)
     finally:
@@ -59,6 +72,33 @@ def main(argv: list[str] | None = None) -> int:
 def _dispatch(app: App, args) -> int:
     if args.command == "chat":
         return chat_cli.run(app, args.session)
+
+    if args.command == "daemon":
+        daemon = Daemon(app, verbose=args.verbose, force=args.now)
+        if not args.once:
+            return daemon.run()
+        message = daemon.tick()
+        print(message or "することなし")
+        return 0
+
+    if args.command == "jobs":
+        summary = jobs_store.summary(app.db)
+        if not summary:
+            print("キューは空です。")
+        for kind, states in sorted(summary.items()):
+            print(f"{kind}: " + ", ".join(f"{state}={count}" for state, count in sorted(states.items())))
+        failures = jobs_store.recent_failures(app.db)
+        if failures:
+            print("\n最近の失敗:")
+            for failure in failures:
+                print(f"  {to_iso(failure['updated_at'])} {failure['kind']}: {failure['last_error'][:120]}")
+        pending_proposals = proposals_store.count_pending(app.db)
+        if pending_proposals:
+            print(f"\n人格変更の提案が {pending_proposals} 件、承認待ちです（nano review）")
+        return 0
+
+    if args.command == "review":
+        return _review(app)
 
     if args.command == "sleep":
         print(app.ingest())
@@ -141,6 +181,42 @@ def _dispatch(app: App, args) -> int:
         return 0
 
     return 1
+
+
+def _review(app: App) -> int:
+    """人格変更の提案を人間が裁く。
+
+    無意識は identity / user_model を書き換えられない。ここを通ったものだけが
+    working_state に入り、監査ログには updated_by='human' として残る。
+    """
+    pending = proposals_store.pending(app.db)
+    if not pending:
+        print("承認待ちの提案はありません。")
+        return 0
+
+    for proposal in pending:
+        print(f"\n── 提案 #{proposal.id} [{proposal.target}] {to_iso(proposal.created_at)}")
+        print(f"いま  : {proposal.current_value or '(未設定)'}")
+        print(f"提案  : {proposal.proposed_value}")
+        if proposal.rationale:
+            print(f"理由  : {proposal.rationale}")
+        try:
+            answer = input("承認する? [y/n/s=保留/q=終了] ").strip().lower()
+        except EOFError:
+            answer = "q"
+
+        if answer == "q":
+            break
+        if answer == "s":
+            continue
+        if answer == "y":
+            state_store.set_value(app.db, proposal.target, proposal.proposed_value, updated_by="human")
+            proposals_store.decide(app.db, proposal.id, proposals_store.STATUS_ACCEPTED)
+            print("反映しました。")
+        else:
+            proposals_store.decide(app.db, proposal.id, proposals_store.STATUS_REJECTED)
+            print("却下しました。")
+    return 0
 
 
 if __name__ == "__main__":

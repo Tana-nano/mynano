@@ -21,12 +21,14 @@
 |---|---|
 | **M0 骨格** | ✅ 設定 / SQLite / llama-server クライアント / 埋め込み / 推論ゲート |
 | **M1 記憶コア＋CUI** | ✅ 書き込みパイプライン・想起・忘却・人格プロンプト・CUI・記憶ベンチ |
-| M2 無意識デーモン | ⬜ 常駐して連想・reflection・忘却を回す（`nano sleep` / `nano decay` を自動化する） |
+| **M2 無意識デーモン** | ✅ 常駐して記憶化・連想・気づき・忘却・整理を回す。外界の取り込みと人格変更の承認フローつき |
 | M3 グラフ可視化 | ⬜ Obsidian 風の記憶グラフビュー |
 | M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）は動く。QLoRA はこれから |
 | M5 偏在化 | ⬜ 音声・アバター・自発発話・外部情報の取り込み |
 
-**M1 の時点で、記憶を持って会話し、忘れ、思い出すところまでは通しで動く。**
+**M2 の時点で、話しかけていない間も動き続ける。**
+会話は勝手に記憶になり、記憶は勝手に繋がり、薄れ、まとまる。
+朝起きると `current_focus`（いま気にしていること）が昨日と変わっている。
 
 ---
 
@@ -70,7 +72,21 @@ python -m nano chat
 > 埋め込みモデルを差し替えるときは次元数（既定1024）を変えないこと。
 > 変えるなら全ノートの再埋め込みが必要になる。
 
-### 4. 使う
+### 4. 無意識を常駐させる
+
+対話とは別プロセスで、背景の処理を回し続ける。
+
+```bash
+python -m nano daemon                # 常駐（Ctrl-C で停止）
+python -m nano daemon --once --now   # 1回ぶんを即座に走らせる（様子見用）
+python -m nano jobs                  # 何をしている/したかを見る
+```
+
+GPU は1枚しかないので、対話とデーモンは `soul.db` のリースで譲り合う。
+**あなたが話しかけた瞬間、背景の思考は中断してキューに戻る。**
+Windows で常駐させる手順は [docs/daemon.md](docs/daemon.md) に。
+
+### 5. 使う
 
 ```
 あなた> 妹の名前はミオ。高校生で吹奏楽部にいる
@@ -85,8 +101,23 @@ nano> …
 ```
 
 会話中の連続性は「直近ターン」が担い、セッションをまたぐ連続性は「記憶」が担う。
-`/sleep`（または終了時の自動実行）を通って初めて、会話は記憶になる。
-M2 のデーモンが入ると、これがアイドル時に勝手に走るようになる。
+会話が記憶になるのは書き込みパイプラインを通ってからで、
+デーモンが動いていればアイドル時に勝手に走る。止めているなら `/sleep` で手動で。
+
+### 外界から取り込む
+
+`soul/inbox/` にテキストファイル（`.txt` `.md` `.json` `.log` `.csv`）を置くと、
+無意識が読んで記憶にする。自分で話したことと同じ扱いになるので、後から普通に想起される。
+
+### 人格の変更を承認する
+
+無意識が直接書き換えるのは `current_focus` と `mood` だけ。
+`identity`（自己像）と `user_model`（あなた像）は提案止まりで、承認するまで1文字も変わらない。
+
+```bash
+python -m nano review                      # 提案を1件ずつ見て承認/却下
+python -m nano state identity --history    # 誰がいつ書き換えたか
+```
 
 ### そのほかのコマンド
 
@@ -113,6 +144,9 @@ soul/
 ├── archive/YYYY-MM.jsonl    生ログの平文ミラー（追記専用・絶対に消さない）
 ├── export/notes/*.md        ノートの Markdown 書き出し（Obsidian でそのまま開ける）
 ├── backup/soul-*.db         スナップショット
+├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
+│   └── processed/           読み終えたファイル
+├── log/                     デーモンのログ（Windows常駐時）
 └── persona_baseline.json    人格プローブの基準応答
 ```
 
@@ -127,7 +161,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 45件。ローカルLLM無しで全部通る
+pytest                                    # 88件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```
@@ -145,10 +179,11 @@ python tests/bench/memory_bench.py --online   # 実際のローカルモデル�
 ## ドキュメント
 
 - [docs/architecture.md](docs/architecture.md) — 全体構成と、なぜそう作ったか
+- [docs/daemon.md](docs/daemon.md) — 無意識デーモンの動かし方と、対話との譲り合い
 - [docs/memory-model.md](docs/memory-model.md) — スキーマ・想起スコア・忘却曲線
 - [docs/persona.md](docs/persona.md) — 人格3層とドリフト計測
 - [docs/prior-art.md](docs/prior-art.md) — 既出の研究・実装と、何を借りて何を借りなかったか
-- [docs/roadmap.md](docs/roadmap.md) — M2 以降
+- [docs/roadmap.md](docs/roadmap.md) — M3 以降
 
 ## ライセンス
 

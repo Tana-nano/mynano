@@ -65,6 +65,28 @@ max_notes_per_episode = 12
 min_segment_events = 6     # これ未満のターン数では話題の切れ目と見なさない
 max_segment_events = 24
 
+[unconscious]
+# 無意識デーモン。`nano daemon` で常駐する。
+enabled = true
+tick_seconds = 20.0
+# 最後の発話からこれだけ経ったら「アイドル」。連想・気づき・忘却はアイドル時にだけ動く。
+idle_seconds = 90.0
+write_delay_seconds = 30.0
+associate_interval_minutes = 15.0
+reflect_interval_minutes = 30.0
+# 前回の reflection 以降に積み上がった重要度がこれを超えたら発火
+reflect_importance_threshold = 3.0
+decay_interval_hours = 24.0
+curate_interval_hours = 168.0
+ingest_interval_minutes = 10.0
+# soul/ 配下。ここにファイルを置くと、無意識が読んで記憶にする。
+inbox_dir = "inbox"
+lease_ttl_seconds = 10.0
+stale_job_seconds = 600.0
+max_job_attempts = 3
+job_retry_seconds = 300.0
+associate_sample = 3
+
 [persona]
 name = "nano"
 constitution_path = "persona/constitution.md"

@@ -161,6 +161,42 @@ class LlamaServerLLM:
         return parsed
 
 
+@dataclass
+class CancellableLLM:
+    """既定の CancelToken を注入する薄いラッパー。
+
+    背景ジョブは `app.ingest()` のように何段も奥で LLM を呼ぶ。
+    その全てに cancel 引数を配って回る代わりに、ジョブの実行中だけ
+    LLM をこれで包む。対話が割り込んだとき、パイプラインの奥で
+    走っている生成もちゃんと Preempted で抜ける。
+    """
+
+    inner: LLM
+    cancel: CancelToken
+
+    def chat(self, messages, *, task="", temperature=None, max_tokens=None, cancel=None, on_token=None):
+        return self.inner.chat(
+            messages,
+            task=task,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cancel=cancel or self.cancel,
+            on_token=on_token,
+        )
+
+    def chat_json(self, messages, *, task="", temperature=None, max_tokens=None, cancel=None):
+        return self.inner.chat_json(
+            messages,
+            task=task,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cancel=cancel or self.cancel,
+        )
+
+    def __getattr__(self, name):  # handlers など、内側の付加機能を素通しする
+        return getattr(self.inner, name)
+
+
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 

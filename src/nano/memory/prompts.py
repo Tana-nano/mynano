@@ -122,3 +122,95 @@ def reflect(recent: Sequence[Note], companion_name: str) -> list[Message]:
         },
         {"role": "user", "content": f"最近の記憶:\n{listing}"},
     ]
+
+
+def associate(notes: Sequence[Note], companion_name: str) -> list[Message]:
+    """無関係に見える記憶同士を並べ、繋がりがあるかを問う。
+
+    これが無意識の主役。想起は「いま話していること」に引きずられるので、
+    誰も探しにいかない組み合わせは永遠に出会わない。それをやるのがこの仕事。
+    ただし**無理に繋がせない**ことが肝心で、何にでも意味を見出すと
+    グラフはただのノイズになる。
+    """
+    listing = "\n".join(f"[{note.id}] {note.content}" for note in notes)
+    return [
+        {
+            "role": "system",
+            "content": (
+                f"あなたは{companion_name}の無意識です。手持ちの記憶をいくつか無作為に並べ、"
+                "そこに繋がりがあるかを考えます。"
+                f"{_JSON_RULE}\n"
+                '形式: {"related": true|false, "pairs": [{"a": ID, "b": ID, '
+                '"relation": "similar|elaborates|causes|contradicts", "weight": 0.0〜1.0}], '
+                '"insight": "気づいたこと一文、無ければnull", "importance": 0.0〜1.0}\n'
+                "規則:\n"
+                "- 大半の組み合わせには繋がりが無い。無ければ related を false にして構わない。\n"
+                "- 「どちらも日常の話」のような当たり前の共通点は繋がりとは呼ばない。\n"
+                "- insight は、並べてみて初めて言えることだけを書く。要約は書かない。"
+            ),
+        },
+        {"role": "user", "content": f"記憶:\n{listing}"},
+    ]
+
+
+def resolve_contradiction(first: Note, second: Note, companion_name: str) -> list[Message]:
+    """矛盾した記憶のどちらを信じるかを決める。"""
+    return [
+        {
+            "role": "system",
+            "content": (
+                f"あなたは{companion_name}の記憶を整理する無意識のプロセスです。"
+                "食い違う2つの記憶を照らし合わせ、どちらを信じるかを判断します。"
+                f"{_JSON_RULE}\n"
+                '形式: {"verdict": "first|second|both|unclear", "reason": "短い理由"}\n'
+                "規則:\n"
+                "- first / second は、そちらが正しく他方は古い（または誤り）という判断。\n"
+                "- both は、時期や文脈が違うだけで両方とも本当だったという判断。\n"
+                "- 判断がつかないなら unclear。無理に決めないこと。誤って消すほうが害が大きい。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"記憶A [{first.id}] ({_when(first)}): {first.content}\n"
+                f"記憶B [{second.id}] ({_when(second)}): {second.content}"
+            ),
+        },
+    ]
+
+
+def curate_state(
+    recent: Sequence[Note], state: dict[str, str], companion_name: str
+) -> list[Message]:
+    """最近の記憶から、いまの関心・気分・自己像・相手像を整える。
+
+    current_focus と mood はそのまま反映される。
+    identity と user_model は提案止まりで、人間が承認するまで反映されない。
+    """
+    listing = "\n".join(f"- {note.content}" for note in recent)
+    current = "\n".join(f"{key}: {value or '(未設定)'}" for key, value in state.items())
+    return [
+        {
+            "role": "system",
+            "content": (
+                f"あなたは{companion_name}の無意識です。最近の記憶を眺め、いまの状態を整えます。"
+                f"{_JSON_RULE}\n"
+                '形式: {"current_focus": "いま気にしていること（一文）", "mood": "短い語", '
+                '"identity_proposal": "自己像をこう更新したい、無ければnull", '
+                '"user_model_proposal": "相手像をこう更新したい、無ければnull", '
+                '"rationale": "提案の理由"}\n'
+                "規則:\n"
+                "- current_focus は最近の記憶に実際に現れた話題から選ぶ。想像で作らない。\n"
+                "- identity_proposal / user_model_proposal は、**確かな変化があったときだけ**書く。"
+                "たいていの日は null でよい。人格は毎日書き換わるものではない。\n"
+                "- 提案するときは、いまの値を置き換える完成した文章として書く。"
+            ),
+        },
+        {"role": "user", "content": f"いまの状態:\n{current}\n\n最近の記憶:\n{listing}"},
+    ]
+
+
+def _when(note: Note) -> str:
+    from ..store.db import to_iso
+
+    return to_iso(note.created_at)[:10]

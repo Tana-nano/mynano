@@ -6,12 +6,13 @@ CUI も、将来のデーモンも UI も、すべてここを入口にする。
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Callable
 
 from .config import Config, load_config
 from .embed import Embedder, HashEmbedder, build_embedder
-from .gate import PRIORITY_CHAT, InferenceGate
+from .gate import PRIORITY_CHAT, SharedInferenceGate
 from .llm import LLM, LlamaServerLLM
 from .memory import decay as decay_module
 from .memory import pipeline as pipeline_module
@@ -30,14 +31,16 @@ class App:
     llm: LLM
     embedder: Embedder
     index: VectorIndex
-    gate: InferenceGate
+    gate: SharedInferenceGate
 
     @classmethod
-    def create(cls, config_path: str | None = None, offline: bool = False) -> "App":
-        return cls.build(load_config(config_path), offline=offline)
+    def create(
+        cls, config_path: str | None = None, offline: bool = False, holder: str = ""
+    ) -> "App":
+        return cls.build(load_config(config_path), offline=offline, holder=holder)
 
     @classmethod
-    def build(cls, config: Config, offline: bool = False) -> "App":
+    def build(cls, config: Config, offline: bool = False, holder: str = "") -> "App":
         """Config を直接渡して組み立てる（テストや複数の魂を切り替えるとき用）。"""
         config.ensure_dirs()
         db = Database(config.db_path)
@@ -56,10 +59,16 @@ class App:
             embedder = build_embedder(config.embed)
         index = VectorIndex(db)
         index.load()
-        return cls(config=config, db=db, llm=llm, embedder=embedder, index=index, gate=InferenceGate())
+        # ゲートはプロセスをまたぐ。対話とデーモンが別プロセスでも譲り合えるように。
+        gate = SharedInferenceGate(
+            config.db_path,
+            holder=f"{holder or 'nano'}:{os.getpid()}",
+            ttl_s=config.unconscious.lease_ttl_seconds,
+        )
+        return cls(config=config, db=db, llm=llm, embedder=embedder, index=index, gate=gate)
 
     def close(self) -> None:
-        for component in (self.llm, self.embedder):
+        for component in (self.llm, self.embedder, self.gate):
             closer = getattr(component, "close", None)
             if callable(closer):
                 closer()
