@@ -101,6 +101,8 @@ class UnconsciousConfig:
     curate_interval_hours: float = 168.0
     ingest_interval_minutes: float = 10.0
     inbox_dir: str = "inbox"
+    # ログを何日ぶん残すか。日次でローテーションする（デーモンが自分で回す）
+    log_retain_days: int = 30
     lease_ttl_seconds: float = 10.0
     stale_job_seconds: float = 600.0
     max_job_attempts: int = 3
@@ -151,6 +153,11 @@ class Config:
         return self.soul_dir / "backup"
 
     @property
+    def log_dir(self) -> Path:
+        """デーモンのログ。無意識が何を考えていたかは、ここに残る。"""
+        return self.soul_dir / "log"
+
+    @property
     def inbox_dir(self) -> Path:
         """外界からの取り込み口。ここに置いたファイルを無意識が記憶にする。"""
         return self.soul_dir / self.unconscious.inbox_dir
@@ -173,6 +180,7 @@ class Config:
             self.archive_dir,
             self.export_dir,
             self.backup_dir,
+            self.log_dir,
             self.inbox_dir,
             self.inbox_dir / "processed",
         ):

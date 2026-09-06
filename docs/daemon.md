@@ -108,7 +108,27 @@ schtasks /create /tn "nano-unconscious" /xml deploy\windows\nano-unconscious.xml
 多重起動は `IgnoreNew` で防いでいるが、仮に二重で走ってもジョブキューが
 同じ仕事を二度実行させないので、記憶が壊れることはない。
 
-ログは `soul\log\unconscious-YYYYMMDD.log` に溜まる。
+## ログ
+
+`soul/log/unconscious.log` に書く。日付が変わると `unconscious.log.YYYY-MM-DD` に回り、
+既定で30日ぶん残る（`[unconscious] log_retain_days`）。
+
+ローテーションを**デーモン自身に持たせている**のは、常駐プロセスだから。
+以前は起動用バッチの側で `unconscious-%date%.log` にリダイレクトしていたが、
+その日付はプロセスが起動した瞬間に一度決まるだけで、3週間動き続ければ
+3週間ぶんが「起動日」の名前の1ファイルに入り、際限なく太る。
+
+ジョブの失敗だけ `WARNING` で出る。普段の動きは `INFO`、
+`--verbose` を付けると「することなし」まで含めて全部出る。
+
+```
+2026-09-06 03:14:07 INFO    無意識を起動しました（tick 20.0秒 / pid 4812）
+2026-09-06 03:14:27 INFO    write: エピソード 1 / 新しい記憶 4 / リンク 5 / 既存記憶の書き換え 1
+2026-09-06 03:31:02 WARNING reflect: 失敗 — ConnectError: llama-server に繋がらない
+```
+
+バッチが `soul\log\stderr.log` に落とすのは、デーモンが立ち上がる前に死んだとき
+（import の失敗、埋め込みモデルが変わっていて起動を止めた、など）の保険だけ。
 
 ## うまく動かないとき
 

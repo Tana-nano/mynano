@@ -202,7 +202,7 @@ soul/
 ├── calibration.json         埋め込みモデルのものさし（実測した類似度分布）
 ├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
 │   └── processed/           読み終えたファイル
-├── log/                     デーモンのログ（Windows常駐時）
+├── log/                     デーモンのログ（unconscious.log。日次ローテーション・既定30日）
 └── persona_baseline.json    人格プローブの基準応答
 ```
 
@@ -217,7 +217,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 154件。ローカルLLM無しで全部通る
+pytest                                    # 160件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```

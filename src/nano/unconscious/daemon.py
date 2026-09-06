@@ -14,15 +14,17 @@ GPU を背景処理で埋めないため。連想も忘却も、相手が黙っ�
 
 from __future__ import annotations
 
+import os
 import signal
 import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .. import logs
 from ..gate import PRIORITY_BACKGROUND, Preempted
 from ..llm import CancellableLLM
 from ..store import jobs as jobs_store
-from ..store.db import now, to_iso
+from ..store.db import now
 from .jobs import HANDLERS
 
 MINUTE = 60.0
@@ -35,9 +37,14 @@ class Daemon:
     verbose: bool = False
     # 待ち時間を全て無視して動かす。夜間処理を手で走らせたいときと、テスト用。
     force: bool = False
-    log: Callable[[str], None] = print
+    # 既定は None。run() で soul/log/ に日次ローテーションする logger を用意する。
+    # 差し替えられるようにしてあるのは、テストが黙らせたいときのため。
+    log: Callable[[str], None] | None = None
+    warn: Callable[[str], None] | None = None
     _stopping: bool = field(default=False, init=False)
     _current_job_id: int | None = field(default=None, init=False)
+    # 直前の tick がジョブの失敗だったか。run() がログの重さを決めるのに使う。
+    _failed: bool = field(default=False, init=False)
 
     # --- 観測 ---
     def last_event_at(self) -> float:
@@ -97,6 +104,7 @@ class Daemon:
     # --- 実行 ---
     def tick(self, at: float | None = None) -> str | None:
         at = now() if at is None else at
+        self._failed = False
         config = self.app.config.unconscious
         db = self.app.db
 
@@ -141,6 +149,7 @@ class Daemon:
                 retry_in=config.job_retry_seconds,
                 max_attempts=config.max_job_attempts,
             )
+            self._failed = True
             return f"{job.kind}: 失敗 — {type(error).__name__}: {error}"
         finally:
             self._current_job_id = None
@@ -152,7 +161,15 @@ class Daemon:
         return dataclasses.replace(self.app, llm=CancellableLLM(self.app.llm, cancel))
 
     def _say(self, message: str) -> None:
-        self.log(f"[{to_iso(now())[11:19]}] {message}")
+        if self.log is not None:
+            self.log(message)
+
+    def _warn(self, message: str) -> None:
+        """後から探したくなるもの（ジョブの失敗など）だけ重く出す。"""
+        if self.warn is not None:
+            self.warn(message)
+        else:
+            self._say(message)
 
     # --- 常駐 ---
     def stop(self, *_args) -> None:
@@ -165,15 +182,22 @@ class Daemon:
             except (ValueError, AttributeError):  # メインスレッド以外／Windows の一部
                 pass
 
+        if self.log is None:
+            logger = logs.setup(self.app.config, verbose=self.verbose)
+            self.log = logger.info
+            self.warn = logger.warning
+
         config = self.app.config.unconscious
-        self._say(f"無意識を起動しました（tick {config.tick_seconds}秒）")
+        self._say(f"無意識を起動しました（tick {config.tick_seconds}秒 / pid {os.getpid()}）")
         try:
             while not self._stopping:
                 try:
                     message = self.tick()
                 except KeyboardInterrupt:
                     break
-                if message:
+                if message and self._failed:
+                    self._warn(message)
+                elif message:
                     self._say(message)
                 elif self.verbose:
                     self._say("することなし")

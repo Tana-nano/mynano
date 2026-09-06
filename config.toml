@@ -91,6 +91,8 @@ curate_interval_hours = 168.0
 ingest_interval_minutes = 10.0
 # soul/ 配下。ここにファイルを置くと、無意識が読んで記憶にする。
 inbox_dir = "inbox"
+# soul/log/unconscious.log を何日ぶん残すか（日次でローテーションする）
+log_retain_days = 30
 lease_ttl_seconds = 10.0
 stale_job_seconds = 600.0
 max_job_attempts = 3

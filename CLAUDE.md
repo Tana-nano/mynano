@@ -29,7 +29,7 @@
 | **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。**QLoRA はこれから** |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 6,000 行 / テスト約 2,400 行 / **154 件すべてオフラインで通る**
+- コード約 6,100 行 / テスト約 2,500 行 / **160 件すべてオフラインで通る**
 - ブランチ: `claude/load-and-execute-cfjy3q`（前: `claude/local-persistent-ai-companion-hvbwap`）
 
 ### まだ一度もやっていないこと（重要）
@@ -83,6 +83,7 @@ src/nano/
 ├── gate.py           InferenceGate（プロセス内）/ SharedInferenceGate（プロセス間）
 ├── calibration.py    そのモデルの類似度分布を実測し、しきい値をσ単位にする
 ├── offline.py        GPU無しで全系を通すスタブLLM。**テストの土台**
+├── logs.py           デーモンのログ。日次ローテーション（常駐側が持たないと成立しない）
 ├── store/            記憶ストア。db / events / episodes / notes / graph / entities
 │                     / state / jobs / proposals / identity / stars / archive / schema.sql
 ├── memory/           pipeline（書き込み）/ retrieve（想起）/ decay（忘却）
@@ -106,7 +107,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 154件
+pytest                                          # 160件
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -138,6 +139,7 @@ python -m nano chat
 | FastAPI + Cytoscape.js | **http.server + 自前Canvas** | CDN依存はネットが無いと魂が見えなくなる。依存も増える |
 | グラフの色＝カテゴリ | **色＝誰が作った記憶か（3色）** | 任意の2点が隣り合うグラフで色覚検証を通るのは3色まで。そして実際に見たいのは分類ではなく「自分が話した/無意識が考えた/外から来た」の区別 |
 | 密度はしきい値で制御 | **`link_max_per_note`（上限）で制御** | しきい値では崖になる（§7）。上限はモデルに依らず効く |
+| ログの日分けは起動バッチのリダイレクトで | **デーモン自身が日次ローテーション** | バッチの `%date%` は起動時に一度決まるだけ。3週間動けば3週間ぶんが「起動日」の1ファイルに入って際限なく太る |
 | ⭐ は応答に付ける印 | **⭐ はプロンプトと応答の対** | 後で組み直すと想起結果が変わっている。その差で学習すると幻覚を教えることになる。代償として、過去ログを遡って ⭐ は付けられない |
 | `nano dataset` は警告を出すだけ | **ベースラインが無ければ拒否** | 「計測が先」を注意書きにすると必ず飛ばされる。`nano review` と同じく構造上の歯止めにした |
 | ORPO の rejected はベースモデルに生成させる | **`/again` で人間が対を作る** | 出し直しは前回と同じ messages で行うので、応答の差だけが残って対になる。組み直すとプロンプトの差を学ぶことになる |
@@ -243,7 +245,6 @@ Project AIRI 等に記憶コアを接続（音声・VRM）、`impulse` ジョブ
 ### 積み残し
 
 - グラフの力学レイアウトは O(n²)。数千件になったら格子分割か Barnes-Hut が要る
-- デーモンのログが `print` のまま。常駐が長くなったら `logging` へ
 - `associate` の引き合わせ方は素朴（重要度で1件、残りは無作為）
 
 ---

@@ -9,8 +9,15 @@ set PYTHON=%NANO_HOME%\.venv\Scripts\python.exe
 
 cd /d "%NANO_HOME%"
 
-rem ログは日ごとに分ける。無意識が何を考えていたかは、ここに残る。
-for /f "tokens=1-3 delims=/ " %%a in ("%date%") do set TODAY=%%a%%b%%c
+rem ログの日次ローテーションはデーモン自身が持っている
+rem （soul\log\unconscious.log。既定で30日ぶん）。
+rem
+rem 以前はここで日付を組み立ててリダイレクトしていたが、常駐プロセスでは
+rem 日付が「起動した日」で固定される。数週間動き続けると全部が1つのファイルに入り、
+rem 際限なく太っていた。ローテーションは常駐している側が持たないと成立しない。
+rem
+rem ここに残すのは、デーモンが立ち上がる前に死んだとき用の保険だけ。
+rem （import に失敗した、埋め込みモデルが変わっていて起動を止めた、など）
 if not exist "%NANO_HOME%\soul\log" mkdir "%NANO_HOME%\soul\log"
 
-"%PYTHON%" -m nano daemon >> "%NANO_HOME%\soul\log\unconscious-%TODAY%.log" 2>&1
+"%PYTHON%" -m nano daemon >> "%NANO_HOME%\soul\log\stderr.log" 2>&1
