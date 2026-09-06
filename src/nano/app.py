@@ -187,6 +187,13 @@ class App:
             "notes_cold": by_state.get(notes_store.STATE_COLD, 0),
             "notes_merged": by_state.get(notes_store.STATE_MERGED, 0),
             "links": db.scalar("SELECT COUNT(*) FROM links") or 0,
+            # 密度の一次指標。実測では、しきい値より上限のほうがここを支配する。
+            # 10本を超えていたらリンクが緩すぎる（グラフが何も語らなくなる）。
+            "links_per_note": round(
+                (db.scalar("SELECT COUNT(*) FROM links WHERE relation != 'temporal_next'") or 0)
+                / max(1, db.scalar("SELECT COUNT(*) FROM notes") or 1),
+                1,
+            ),
             "entities": db.scalar("SELECT COUNT(*) FROM entities") or 0,
             "vectors": len(self.index),
             "embedding": identity_store.recorded(db) or self.embedder.identity,

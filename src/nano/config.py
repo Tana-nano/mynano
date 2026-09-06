@@ -74,6 +74,12 @@ class PipelineConfig:
     link_top_k: int = 8
     link_min_similarity: float = 0.32
     link_min_sigma: float = 1.5
+    # 1つの記憶が新たに張るリンクの上限。
+    # しきい値だけで密度を制御しようとすると必ず失敗する。乱数ペアで測った分布を
+    # 「上位k件」という偏ったペアに当てているので、しきい値はどうしても分布の尾に
+    # 置くことになり、そこでは少し動かしただけで密度が桁で変わる（実測で確認）。
+    # 上限は埋め込みモデルに依らず効くので、こちらを主たる制御にする。
+    link_max_per_note: int = 3
     link_judge_budget: int = 6
     max_notes_per_episode: int = 12
     min_segment_events: int = 6

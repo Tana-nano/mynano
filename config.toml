@@ -67,6 +67,9 @@ segment_drift_sigma = 1.0
 link_top_k = 8             # 新ノートが関係判定を行う近傍数
 link_min_similarity = 0.32 # これ未満の候補はLLMに判定させない（無駄なコール削減）
 link_min_sigma = 1.5       # calibrate 済みならこちら（平均 + 1.5σ を超えた候補だけ）
+# 1記憶が新たに張るリンクの上限。密度を決めるのは実質こちら。
+# しきい値は「近いものが何も無いときに繋がない」ための下限として働く。
+link_max_per_note = 3
 link_judge_budget = 6      # 1エピソードあたりの関係判定コール数の上限
 max_notes_per_episode = 12
 min_segment_events = 6     # これ未満のターン数では話題の切れ目と見なさない

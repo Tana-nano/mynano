@@ -215,11 +215,12 @@ def _ingest_segment(
             for note_id, score in neighbours
             if score >= link_floor
         ]
+        cap = config.pipeline.link_max_per_note
         if neighbours and position in judged:
-            _judge_and_link(db, llm, index, embedder, note, neighbours, companion, report)
+            _judge_and_link(db, llm, index, embedder, note, neighbours, companion, report, cap)
         else:
             # 予算外はベクトル類似だけで素朴に繋ぐ（無いよりずっとよい）
-            for note_id, score in neighbours[:3]:
+            for note_id, score in neighbours[:cap]:
                 graph_store.add(db, note.id, note_id, "similar", score, created_by="vector", symmetric=True)
                 report.links += 1
 
@@ -255,6 +256,7 @@ def _judge_and_link(
     neighbours: Sequence[tuple[int, float]],
     companion: str,
     report: IngestReport,
+    cap: int,
 ) -> None:
     candidates = []
     for note_id, score in neighbours:
@@ -266,6 +268,8 @@ def _judge_and_link(
 
     payload = llm.chat_json(prompts.judge_links(note, candidates, companion), task="judge_links")
     known = {existing.id for existing, _ in candidates}
+
+    accepted: list[tuple[int, str, float, object]] = []
     for link in payload.get("links", []) or []:
         try:
             target = int(link["id"])
@@ -273,8 +277,14 @@ def _judge_and_link(
             continue
         if target not in known:
             continue
-        relation = str(link.get("relation", "similar"))
-        weight = _clamp(link.get("weight", 0.5))
+        accepted.append(
+            (target, str(link.get("relation", "similar")), _clamp(link.get("weight", 0.5)), link)
+        )
+    # 関係が強い順に上限まで。LLM が10件繋げと言っても、記憶は何にでも
+    # 結びついてはいけない（結びつきすぎたグラフは何も語らない）。
+    accepted.sort(key=lambda item: item[2], reverse=True)
+
+    for target, relation, weight, link in accepted[:cap]:
         graph_store.add(db, note.id, target, relation, weight, created_by="llm", symmetric=True)
         report.links += 1
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+from nano.app import App
+from nano.config import Config, PathsConfig
 from nano.memory import pipeline
 from nano.store import events as events_store
 from nano.store import notes as notes_store
@@ -83,6 +85,32 @@ def test_segmentation_splits_on_time_gap(app):
     segments = pipeline.segment(events_store.pending(app.db), app.embedder, app.config)
     assert len(segments) == 2
     assert len(segments[0]) == 2
+
+
+def test_link_count_per_note_is_capped(app):
+    """密度を決めるのは上限であって、しきい値ではない。
+
+    実際の埋め込みモデルで測ると、類似度のしきい値だけで密度を制御しようとすると
+    崖になる（σ 2.0→2.5 で 1記憶あたり 2.5本→0.3本）。乱数ペアで測った分布を
+    「上位k件」という偏ったペアに当てているため。上限はモデルに依らず効く。
+    """
+    def links_with(cap: int) -> int:
+        instance = App.build(
+            Config(root=app.config.root / f"cap{cap}", paths=PathsConfig(soul_dir="soul")),
+            offline=True,
+        )
+        try:
+            instance.config.pipeline.link_max_per_note = cap
+            instance.config.pipeline.link_judge_budget = 99  # 全ノートをLLM判定に回す
+            converse(instance, CONVERSATION)
+            instance.ingest()
+            return instance.db.scalar(
+                "SELECT COUNT(*) FROM links WHERE relation != 'temporal_next'"
+            )
+        finally:
+            instance.close()
+
+    assert links_with(1) < links_with(5), "上限がリンク数に効いていない"
 
 
 def test_existing_note_context_can_be_revised(app):
