@@ -18,6 +18,16 @@ from . import vectors
 class Embedder(Protocol):
     dim: int
 
+    @property
+    def identity(self) -> str:
+        """このベクトル空間の名前。`<モデル名>@<次元数>`。
+
+        異なるモデルで作ったベクトルを同じ空間で比べても意味は無い。
+        魂にこの文字列を記録しておき、起動時に照合する。
+        これが無いと、モデルを差し替えた瞬間に記憶が静かに壊れる。
+        """
+        ...
+
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]: ...
 
     def embed_query(self, text: str) -> list[float]: ...
@@ -43,6 +53,10 @@ class ServerEmbedder:
         self._client = httpx.Client(
             base_url=self.base_url.rstrip("/"), headers=headers, timeout=self.timeout_s
         )
+
+    @property
+    def identity(self) -> str:
+        return f"{self.model}@{self.dim}"
 
     def close(self) -> None:
         self._client.close()
@@ -88,6 +102,11 @@ class HashEmbedder:
     dim: int = 1024
     query_prefix: str = ""
     passage_prefix: str = ""
+
+    @property
+    def identity(self) -> str:
+        # 実機の埋め込みと混ざらないよう、はっきり別の名前を名乗る
+        return f"hash@{self.dim}"
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return [self._embed(text) for text in texts]

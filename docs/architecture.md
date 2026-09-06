@@ -43,6 +43,8 @@
 | `nano/llm.py` | OpenAI互換エンドポイントのクライアント。ストリーミング・中断・JSON抽出＋1回だけの修復 |
 | `nano/embed.py` | 埋め込み。`ServerEmbedder`（e5のprefix対応）と `HashEmbedder`（オフライン用の決定的スタブ） |
 | `nano/vectors.py` | ベクトル演算と永続表現（float32のBLOB）。numpy があれば使い、無ければ純Python |
+| `nano/calibration.py` | そのモデルの類似度分布を実測し、しきい値をσ単位で決められるようにする |
+| `nano/store/identity.py` | どの埋め込み空間で作った記憶かを記録・照合する（モデル差し替えの安全装置） |
 | `nano/gate.py` | `InferenceGate`（プロセス内）と `SharedInferenceGate`（プロセス間）。1枚のGPUを意識と無意識で譲り合う |
 | `nano/store/` | 記憶ストア。`db` `events` `episodes` `notes` `graph` `entities` `state` `archive` |
 | `nano/memory/pipeline.py` | 書き込み（生ログ → 記憶） |

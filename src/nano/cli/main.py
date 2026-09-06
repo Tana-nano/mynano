@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .. import calibration as calibration_module
 from ..app import App
+from ..memory import reembed as reembed_module
 from ..memory.retrieve import recall, recall_explicit
 from ..persona import drift as drift_module
-from ..store import archive, entities as entities_store, jobs as jobs_store
+from ..store import archive, entities as entities_store, identity as identity_store
+from ..store import jobs as jobs_store
 from ..store import proposals as proposals_store, state as state_store
 from ..store.db import to_iso
 from ..unconscious.daemon import Daemon
@@ -41,6 +44,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sleep", help="未処理の会話を記憶に変える（書き込みパイプライン）")
     sub.add_parser("decay", help="忘却処理（cold化と統合）")
     sub.add_parser("stats", help="記憶の量を見る")
+    calibrate = sub.add_parser(
+        "calibrate", help="いまの埋め込みモデルのものさしを実測する（モデルを替えたら回す）"
+    )
+    calibrate.add_argument("--pairs", type=int, default=calibration_module.MAX_PAIRS)
+
+    reembed = sub.add_parser("reembed", help="記憶を今の埋め込みモデルで埋め直す")
+    reembed.add_argument("--yes", action="store_true", help="確認を飛ばす")
+
     sub.add_parser("export", help="ノートを Markdown に書き出す")
     sub.add_parser("backup", help="soul.db のスナップショットを取る")
 
@@ -62,7 +73,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     holder = "daemon" if args.command == "daemon" else "chat"
-    app = App.create(config_path=args.config, offline=args.offline, holder=holder)
+    try:
+        app = App.create(
+            config_path=args.config,
+            offline=args.offline,
+            holder=holder,
+            # 埋め直しだけは、モデルが変わっている状態で起動できないと始まらない
+            allow_new_embedder=(args.command == "reembed"),
+        )
+    except identity_store.EmbeddingMismatch as mismatch:
+        print(mismatch, file=sys.stderr)
+        return 2
     try:
         return _dispatch(app, args)
     finally:
@@ -111,9 +132,58 @@ def _dispatch(app: App, args) -> int:
     if args.command == "stats":
         for key, value in app.stats().items():
             print(f"{key}: {value}")
+        if app.calibration is None:
+            print("calibration: 未測定（しきい値は config.toml の絶対値を使用中 — nano calibrate）")
+        else:
+            print(
+                f"calibration: {to_iso(app.calibration.measured_at)[:10]} 実測 "
+                f"({app.calibration.source}, {app.calibration.similarity.n} ペア)"
+            )
         top = entities_store.counts(app.db, limit=10)
         if top:
             print("よく出てくる固有名詞: " + ", ".join(f"{name}({count})" for name, count in top))
+        return 0
+
+    if args.command == "calibrate":
+        print(f"{app.embedder.identity} のものさしを測っています…")
+        measured = calibration_module.measure(app, max_pairs=args.pairs)
+        target = calibration_module.save(app.config, measured)
+        app.reload_calibration()
+        print()
+        print(measured.describe())
+        print()
+        print("設定値（左: config.toml の絶対値 / 右: 実測に基づく実効値）")
+        for label, absolute, effective in calibration_module.recommendations(measured, app.config):
+            print(f"  {label}")
+            print(f"      {absolute:.3f}  →  {effective:.3f}")
+        print()
+        print(f"保存しました: {target}")
+        print("これ以降、しきい値は測定した分布に対する相対位置で決まります。")
+        return 0
+
+    if args.command == "reembed":
+        current = identity_store.recorded(app.db)
+        count = app.db.scalar("SELECT COUNT(*) FROM notes") or 0
+        print(f"記憶 {count} 件を {app.embedder.identity} で埋め直します。")
+        if current and current != app.embedder.identity:
+            print(f"（いまの魂は {current} で作られています）")
+        print("ノートの本文・リンク・重要度・半減期は変わりません。変わるのは検索用の座標だけです。")
+        if not args.yes:
+            try:
+                if input("続けますか? [y/N] ").strip().lower() != "y":
+                    print("やめました。")
+                    return 0
+            except EOFError:
+                print("やめました。")
+                return 0
+
+        def progress(done: int, total: int) -> None:
+            print(f"  {done}/{total}", end="\r", flush=True)
+
+        report = reembed_module.run(app, on_progress=progress)
+        print(" " * 30, end="\r")
+        print(report)
+        print("分布も変わっているので、続けて `nano calibrate` を回してください。")
         return 0
 
     if args.command == "export":

@@ -51,15 +51,22 @@ importance_span = 200.0
 # これを下回ったら cold 化（＝通常想起から外れる。消えはしない）
 cold_threshold = 0.05
 # cold ノートを統合するときのクラスタ類似度
+# 統合クラスタの近さ。nano calibrate 済みなら sigma のほうが使われる。
 consolidate_similarity = 0.82
+consolidate_sigma = 2.0
 consolidate_min_cluster = 3
 
 [pipeline]
 # 話題の切れ目とみなす条件
 segment_gap_minutes = 45.0
-segment_drift = 0.55       # 隣接ターンの埋め込み距離がこれを超えたら切る
+# 隣接ターンの埋め込み距離がこれを超えたら話題の切れ目とみなす。
+# コサインの絶対値はモデルごとに帯が違うので、nano calibrate 済みなら
+# 実測した分布に対する sigma（平均から何標準偏差か）のほうが使われる。
+segment_drift = 0.55
+segment_drift_sigma = 1.0
 link_top_k = 8             # 新ノートが関係判定を行う近傍数
 link_min_similarity = 0.32 # これ未満の候補はLLMに判定させない（無駄なコール削減）
+link_min_sigma = 1.5       # calibrate 済みならこちら（平均 + 1.5σ を超えた候補だけ）
 link_judge_budget = 6      # 1エピソードあたりの関係判定コール数の上限
 max_notes_per_episode = 12
 min_segment_events = 6     # これ未満のターン数では話題の切れ目と見なさない

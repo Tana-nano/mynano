@@ -55,11 +55,21 @@ def format_transcript(events: Sequence[Event], companion_name: str) -> str:
     )
 
 
-def segment(events: Sequence[Event], embedder: Embedder, config: Config) -> list[list[Event]]:
+def segment(
+    events: Sequence[Event],
+    embedder: Embedder,
+    config: Config,
+    calibration=None,
+) -> list[list[Event]]:
     """話題の切れ目で会話を切る。時間の空白と、意味のドリフトの2つを見る。"""
     if not events:
         return []
     pipeline = config.pipeline
+    drift_cut = (
+        calibration.drift_threshold(pipeline.segment_drift_sigma)
+        if calibration is not None and calibration.has_drift
+        else pipeline.segment_drift
+    )
     vectors_by_index = embedder.embed_documents([event.content for event in events])
 
     from .. import vectors as vector_math
@@ -75,7 +85,7 @@ def segment(events: Sequence[Event], embedder: Embedder, config: Config) -> list
         drift = 1.0 - vector_math.cosine(vectors_by_index[index], centroid)
 
         cut = gap_minutes > pipeline.segment_gap_minutes
-        cut = cut or (len(current) >= pipeline.min_segment_events and drift > pipeline.segment_drift)
+        cut = cut or (len(current) >= pipeline.min_segment_events and drift > drift_cut)
         cut = cut or len(current) >= pipeline.max_segment_events
         if cut:
             segments.append(current)
@@ -94,14 +104,15 @@ def ingest_pending(
     index: VectorIndex,
     config: Config,
     limit: int = 500,
+    calibration=None,
 ) -> IngestReport:
     """未処理の生ログを記憶に変える。会話の直後、またはアイドル時に呼ばれる。"""
     pending = events_store.pending(db, limit=limit)
     report = IngestReport()
     if not pending:
         return report
-    for chunk in segment(pending, embedder, config):
-        _ingest_segment(db, llm, embedder, index, config, chunk, report)
+    for chunk in segment(pending, embedder, config, calibration):
+        _ingest_segment(db, llm, embedder, index, config, chunk, report, calibration)
     return report
 
 
@@ -113,8 +124,16 @@ def _ingest_segment(
     config: Config,
     chunk: Sequence[Event],
     report: IngestReport,
+    calibration=None,
 ) -> None:
     companion = config.persona.name
+    # リンクを張るかどうかの足切り。キャリブレーション済みなら、そのモデルの
+    # 分布に対する相対位置で決める。絶対コサインはモデルを替えると意味が変わる。
+    link_floor = (
+        calibration.similarity_threshold(config.pipeline.link_min_sigma)
+        if calibration is not None
+        else config.pipeline.link_min_similarity
+    )
     transcript = format_transcript(chunk, companion)
 
     # ② 要約
@@ -194,7 +213,7 @@ def _ingest_segment(
         neighbours = [
             (note_id, score)
             for note_id, score in neighbours
-            if score >= config.pipeline.link_min_similarity
+            if score >= link_floor
         ]
         if neighbours and position in judged:
             _judge_and_link(db, llm, index, embedder, note, neighbours, companion, report)

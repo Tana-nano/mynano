@@ -63,14 +63,21 @@ llama-server -m models/Qwen3-14B-Q4_K_M.gguf -c 8192 --port 8080
 llama-server -m models/multilingual-e5-large-Q8_0.gguf --embedding --port 8081
 ```
 
-`config.toml` の `[llm]` `[embed]` を合わせたら:
+`config.toml` の `[llm]` `[embed]` を合わせたら、まずものさしを測る:
 
 ```bash
+python -m nano calibrate     # そのモデルの類似度分布を実測する
 python -m nano chat
 ```
 
-> 埋め込みモデルを差し替えるときは次元数（既定1024）を変えないこと。
-> 変えるなら全ノートの再埋め込みが必要になる。
+`calibrate` を飛ばすと、しきい値が `config.toml` の絶対値のまま使われる。
+コサインの絶対値はモデルごとに全く違う帯に分布するので、**初回は必ず回すこと**。
+（オフラインのハッシュ埋め込みでは無関係な文が ≈0.0、e5 系では ≈0.78 に集まる。
+同じ数字が前者では「ほとんど通さない」、後者では「全部通す」になる。）
+
+埋め込みモデルを差し替えるときは [docs/models.md](docs/models.md) の手順に従う。
+別のモデルで作ったベクトルが混ざると想起が静かに壊れるので、
+**モデルが変わっていると起動を止める**ようにしてある。
 
 ### 4. 無意識を常駐させる
 
@@ -129,6 +136,8 @@ python -m nano sleep                 # 未処理の会話を記憶に変える
 python -m nano decay                 # 忘却（cold化と統合）
 python -m nano export                # ノートを Markdown に書き出す
 python -m nano backup                # soul.db のスナップショット
+python -m nano calibrate             # 埋め込みモデルのものさしを実測する
+python -m nano reembed               # 記憶を今の埋め込みモデルで埋め直す
 python -m nano probe                 # 人格プローブ。基準からのずれを測る
 python -m nano state                 # working_state（無意識が書き換える場所）を覗く
 python -m nano state current_focus --history   # 書き換えの監査ログ
@@ -144,6 +153,7 @@ soul/
 ├── archive/YYYY-MM.jsonl    生ログの平文ミラー（追記専用・絶対に消さない）
 ├── export/notes/*.md        ノートの Markdown 書き出し（Obsidian でそのまま開ける）
 ├── backup/soul-*.db         スナップショット
+├── calibration.json         埋め込みモデルのものさし（実測した類似度分布）
 ├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
 │   └── processed/           読み終えたファイル
 ├── log/                     デーモンのログ（Windows常駐時）
@@ -161,7 +171,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 88件。ローカルLLM無しで全部通る
+pytest                                    # 112件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```
@@ -180,6 +190,7 @@ python tests/bench/memory_bench.py --online   # 実際のローカルモデル�
 
 - [docs/architecture.md](docs/architecture.md) — 全体構成と、なぜそう作ったか
 - [docs/daemon.md](docs/daemon.md) — 無意識デーモンの動かし方と、対話との譲り合い
+- [docs/models.md](docs/models.md) — モデルの差し替え手順とキャリブレーション
 - [docs/memory-model.md](docs/memory-model.md) — スキーマ・想起スコア・忘却曲線
 - [docs/persona.md](docs/persona.md) — 人格3層とドリフト計測
 - [docs/prior-art.md](docs/prior-art.md) — 既出の研究・実装と、何を借りて何を借りなかったか

@@ -58,16 +58,22 @@ class DecayConfig:
     # 「妹の名前」と「今日の昼食」の寿命が桁で違うべきだから。
     importance_span: float = 200.0
     cold_threshold: float = 0.05
+    # 統合クラスタの近さ。キャリブレーション済みなら σ 単位のほうが使われる。
     consolidate_similarity: float = 0.82
+    consolidate_sigma: float = 2.0
     consolidate_min_cluster: int = 3
 
 
 @dataclass
 class PipelineConfig:
     segment_gap_minutes: float = 45.0
+    # 以下の2つは「絶対コサイン」と「σ単位」の対。キャリブレーション済みなら σ が使われる。
+    # コサインの絶対値はモデルごとに帯が違うので、絶対値だけでは移植できない。
     segment_drift: float = 0.55
+    segment_drift_sigma: float = 1.0
     link_top_k: int = 8
     link_min_similarity: float = 0.32
+    link_min_sigma: float = 1.5
     link_judge_budget: int = 6
     max_notes_per_episode: int = 12
     min_segment_events: int = 6

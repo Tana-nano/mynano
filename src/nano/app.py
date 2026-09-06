@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
+from . import calibration as calibration_module
 from .config import Config, load_config
 from .embed import Embedder, HashEmbedder, build_embedder
 from .gate import PRIORITY_CHAT, SharedInferenceGate
@@ -19,7 +20,8 @@ from .memory import pipeline as pipeline_module
 from .memory.retrieve import Recall, recall
 from .offline import OfflineLLM
 from .persona.compose import build_messages
-from .store import archive, events as events_store, notes as notes_store, state as state_store
+from .store import archive, events as events_store, identity as identity_store
+from .store import notes as notes_store, state as state_store
 from .store.db import Database
 from .store.notes import VectorIndex
 
@@ -32,16 +34,37 @@ class App:
     embedder: Embedder
     index: VectorIndex
     gate: SharedInferenceGate
+    # そのモデルのものさし。未測定なら None で、設定の絶対値にそのまま落ちる。
+    calibration: object | None = None
 
     @classmethod
     def create(
-        cls, config_path: str | None = None, offline: bool = False, holder: str = ""
+        cls,
+        config_path: str | None = None,
+        offline: bool = False,
+        holder: str = "",
+        allow_new_embedder: bool = False,
     ) -> "App":
-        return cls.build(load_config(config_path), offline=offline, holder=holder)
+        return cls.build(
+            load_config(config_path),
+            offline=offline,
+            holder=holder,
+            allow_new_embedder=allow_new_embedder,
+        )
 
     @classmethod
-    def build(cls, config: Config, offline: bool = False, holder: str = "") -> "App":
-        """Config を直接渡して組み立てる（テストや複数の魂を切り替えるとき用）。"""
+    def build(
+        cls,
+        config: Config,
+        offline: bool = False,
+        holder: str = "",
+        allow_new_embedder: bool = False,
+    ) -> "App":
+        """Config を直接渡して組み立てる（テストや複数の魂を切り替えるとき用）。
+
+        allow_new_embedder は `nano reembed` 専用の抜け道。
+        それ以外の経路では、埋め込みモデルが変わっていたら起動を止める。
+        """
         config.ensure_dirs()
         db = Database(config.db_path)
         if offline:
@@ -57,6 +80,15 @@ class App:
                 max_tokens=config.llm.max_tokens,
             )
             embedder = build_embedder(config.embed)
+
+        # 別のモデルで作ったベクトルと混ぜない。混ざると想起が静かに壊れる。
+        if not allow_new_embedder:
+            try:
+                identity_store.check(db, embedder.identity)
+            except identity_store.EmbeddingMismatch:
+                db.close()
+                raise
+
         index = VectorIndex(db)
         index.load()
         # ゲートはプロセスをまたぐ。対話とデーモンが別プロセスでも譲り合えるように。
@@ -65,7 +97,15 @@ class App:
             holder=f"{holder or 'nano'}:{os.getpid()}",
             ttl_s=config.unconscious.lease_ttl_seconds,
         )
-        return cls(config=config, db=db, llm=llm, embedder=embedder, index=index, gate=gate)
+        return cls(
+            config=config,
+            db=db,
+            llm=llm,
+            embedder=embedder,
+            index=index,
+            gate=gate,
+            calibration=calibration_module.load(config, embedder.identity),
+        )
 
     def close(self) -> None:
         for component in (self.llm, self.embedder, self.gate):
@@ -114,8 +154,11 @@ class App:
     # --- 無意識（M1 では手動起動。M2 でデーモンが同じ関数を叩く） ---
     def ingest(self) -> pipeline_module.IngestReport:
         return pipeline_module.ingest_pending(
-            self.db, self.llm, self.embedder, self.index, self.config
+            self.db, self.llm, self.embedder, self.index, self.config, calibration=self.calibration
         )
+
+    def reload_calibration(self) -> None:
+        self.calibration = calibration_module.load(self.config, self.embedder.identity)
 
     def run_decay(self, at: float | None = None) -> decay_module.DecayReport:
         return decay_module.run(
@@ -126,6 +169,7 @@ class App:
             self.index,
             companion_name=self.config.persona.name,
             at=at,
+            calibration=self.calibration,
         )
 
     # --- 観測 ---
@@ -145,5 +189,6 @@ class App:
             "links": db.scalar("SELECT COUNT(*) FROM links") or 0,
             "entities": db.scalar("SELECT COUNT(*) FROM entities") or 0,
             "vectors": len(self.index),
+            "embedding": identity_store.recorded(db) or self.embedder.identity,
             "db_bytes": self.config.db_path.stat().st_size if self.config.db_path.exists() else 0,
         }

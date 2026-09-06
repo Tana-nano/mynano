@@ -117,6 +117,7 @@ def consolidate(
     index: VectorIndex,
     companion_name: str = "nano",
     at: float | None = None,
+    calibration=None,
 ) -> DecayReport:
     """cold な記憶の群れを1枚の上位ノートにまとめる（圧縮・統合）。
 
@@ -130,7 +131,12 @@ def consolidate(
 
     vecs = {note.id: index.vector_of(note.id) for note in cold}
     vecs = {note_id: vector for note_id, vector in vecs.items() if vector}
-    clusters = _cluster(cold, vecs, config.consolidate_similarity, config.consolidate_min_cluster)
+    similarity_floor = (
+        calibration.similarity_threshold(config.consolidate_sigma)
+        if calibration is not None
+        else config.consolidate_similarity
+    )
+    clusters = _cluster(cold, vecs, similarity_floor, config.consolidate_min_cluster)
 
     for members in clusters:
         payload = llm.chat_json(
@@ -173,11 +179,12 @@ def run(
     index: VectorIndex,
     companion_name: str = "nano",
     at: float | None = None,
+    calibration=None,
 ) -> DecayReport:
     """1晩ぶんの忘却処理。M2 の無意識デーモンからも、手動コマンドからも呼ばれる。"""
     at = clock() if at is None else at
     report = DecayReport(cooled=cool_faded(db, config, index, at))
-    consolidation = consolidate(db, llm, embedder, config, index, companion_name, at)
+    consolidation = consolidate(db, llm, embedder, config, index, companion_name, at, calibration)
     report.consolidated = consolidation.consolidated
     report.merged = consolidation.merged
     return report
