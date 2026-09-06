@@ -217,7 +217,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 160件。ローカルLLM無しで全部通る
+pytest                                    # 181件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```

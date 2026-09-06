@@ -51,7 +51,14 @@ class ServerEmbedder:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         self._client = httpx.Client(
-            base_url=self.base_url.rstrip("/"), headers=headers, timeout=self.timeout_s
+            base_url=self.base_url.rstrip("/"),
+            headers=headers,
+            timeout=self.timeout_s,
+            # HTTP_PROXY などの環境変数を読みに行かせない。相手は自分のマシン
+            # （か、せいぜい家の LAN）なので、プロキシを通す理由が無い。
+            # 通してしまうと、会社支給のマシンなどで localhost 宛てまでプロキシに
+            # 回され、「llama-server に繋がらない」という嘘のエラーになる（実測）。
+            trust_env=False,
         )
 
     @property

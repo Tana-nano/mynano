@@ -29,15 +29,18 @@
 | **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。**QLoRA はこれから** |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 6,100 行 / テスト約 2,500 行 / **160 件すべてオフラインで通る**
+- コード約 6,100 行 / テスト約 2,800 行 / **181 件すべてオフラインで通る**
 - ブランチ: `claude/load-and-execute-cfjy3q`（前: `claude/local-persistent-ai-companion-hvbwap`）
 
 ### まだ一度もやっていないこと（重要）
 
 **ユーザーの実機（llama-server + multilingual-e5 + GPU）で動かしていない。**
-サンドボックス内では訓練済みの日本語埋め込みモデルまでは通したが（§7）、
-**LLM は一度も本物を使っていない。** プロンプトの実挙動、JSON の壊れ方、
-生成速度、VRAM 実測値はすべて未検証。
+サンドボックス内では訓練済みの日本語埋め込みモデルまでは通した（§7）。
+HTTP 経路そのものは偽サーバー（`tests/fake_server.py`）で通してある
+（URL の組み立て・SSE・JSON の拾い方・エラー・中断・プロキシ環境）。
+
+**残っているのは本物のモデルでしか分からないこと:** プロンプトの実挙動、
+JSON の壊れ方の実際、生成速度、VRAM 実測値、想起の質。
 
 ---
 
@@ -107,7 +110,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 160件
+pytest                                          # 181件
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -154,6 +157,10 @@ python -m nano chat
 - **リポジトリ直下の `__init__.py`** → pytest がリポジトリ全体をパッケージ扱いし、
   `import bpy` で**テストが1件も走らなくなっていた**（`attic/` へ移動して解決）
 - **ラベル衝突・キャンバス歪み** → スクリーンショットを撮るまで気づかなかった
+- **`LlamaServerLLM` にテストが1件も無かった** → 全テストが `OfflineLLM` を通っており、
+  HTTP クライアントは**一度も実行されていなかった**。偽サーバーを立てて塞いだ
+- **`HTTP_PROXY` があると localhost にもプロキシが挟まる** → 「llama-server に
+  繋がらない」という嘘のエラーが出る。両クライアントを `trust_env=False` にした
 
 > **教訓: 半分は「走らせるまで見えなかった」。**
 > 記憶の品質はベンチで、UI は実描画で、埋め込みは実モデルで確かめること。
