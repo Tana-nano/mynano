@@ -50,13 +50,35 @@ class Sample:
 
 
 @dataclass
+class Pair:
+    """ORPO の1件。同じプロンプトに対する ⭐ と ✗ の対。
+
+    `/again`（同じ messages で応答を出し直す）を通ると自然に貯まる。
+    プロンプトが1バイトでも違えば対にしない。違うものを比べても、
+    モデルが学ぶのは「応答の良し悪し」ではなく「プロンプトの差」になる。
+    """
+
+    prompt: list[dict[str, str]]
+    chosen: str
+    rejected: str
+
+    def to_dict(self) -> dict:
+        return {"prompt": self.prompt, "chosen": self.chosen, "rejected": self.rejected}
+
+
+@dataclass
 class Dataset:
     keep: list[Sample] = field(default_factory=list)
     avoid: list[Sample] = field(default_factory=list)
+    pairs: list[Pair] = field(default_factory=list)
     skipped: int = 0  # プロンプトが残っていない ⭐（古い版で付いたものなど）
 
     def __str__(self) -> str:
-        parts = [f"教師データ {len(self.keep)} 件", f"避けたい応答 {len(self.avoid)} 件"]
+        parts = [
+            f"教師データ {len(self.keep)} 件",
+            f"避けたい応答 {len(self.avoid)} 件",
+            f"ORPO の対 {len(self.pairs)} 件",
+        ]
         if self.skipped:
             parts.append(f"プロンプト欠落のため除外 {self.skipped} 件")
         return " / ".join(parts)
@@ -81,7 +103,40 @@ def build(db: Database, limit: int = 100_000) -> Dataset:
     # 古い順に。学習時に時系列で切りたくなることがある。
     dataset.keep.reverse()
     dataset.avoid.reverse()
+    dataset.pairs = _pair_up(dataset.keep, dataset.avoid)
     return dataset
+
+
+def _prompt_key(sample: Sample) -> str:
+    """プロンプトの同一性。messages を丸ごと正規化して比べる。"""
+    return json.dumps(sample.messages[:-1], ensure_ascii=False, sort_keys=True)
+
+
+def _pair_up(keep: list[Sample], avoid: list[Sample]) -> list[Pair]:
+    """同じプロンプトを共有する ⭐ と ✗ を対にする。
+
+    `/again` で出し直すと、2つ目以降は前回と同じ messages で生成されるので、
+    ここが噛み合う。⭐ も ✗ も付いていない普通の会話は当然どこにも入らない。
+    """
+    avoid_by_prompt: dict[str, list[Sample]] = {}
+    for sample in avoid:
+        avoid_by_prompt.setdefault(_prompt_key(sample), []).append(sample)
+
+    pairs: list[Pair] = []
+    for chosen in keep:
+        for rejected in avoid_by_prompt.get(_prompt_key(chosen), []):
+            if chosen.messages[-1]["content"] == rejected.messages[-1]["content"]:
+                # 一字一句同じものを「良い/悪い」として並べても学習の材料にならない
+                # （温度0で出し直すとこうなる）。対にせず捨てる。
+                continue
+            pairs.append(
+                Pair(
+                    prompt=chosen.messages[:-1],
+                    chosen=chosen.messages[-1]["content"],
+                    rejected=rejected.messages[-1]["content"],
+                )
+            )
+    return pairs
 
 
 def _write_jsonl(path: Path, samples: list[Sample]) -> None:
@@ -110,6 +165,9 @@ def export(
     target.mkdir(parents=True, exist_ok=True)
     _write_jsonl(target / "sft.jsonl", dataset.keep)
     _write_jsonl(target / "avoid.jsonl", dataset.avoid)
+    with (target / "orpo.jsonl").open("w", encoding="utf-8") as handle:
+        for pair in dataset.pairs:
+            handle.write(json.dumps(pair.to_dict(), ensure_ascii=False) + "\n")
 
     manifest = {
         "created": to_iso(now()),
@@ -119,6 +177,7 @@ def export(
         "counts": {
             "sft": len(dataset.keep),
             "avoid": len(dataset.avoid),
+            "orpo_pairs": len(dataset.pairs),
             "skipped_no_prompt": dataset.skipped,
         },
         "format": (
@@ -127,9 +186,11 @@ def export(
             "そのまま入っている（組み直していない）。"
         ),
         "note": (
-            "ORPO で使うなら rejected 側が要る。avoid.jsonl は「同じプロンプトに対する"
-            "悪い応答」ではないので、そのままでは対にならない。学習時に、同じ system+user を"
-            "素のベースモデル（憲章なし）に投げて rejected を生成するのが素直。"
+            "orpo.jsonl は {prompt, chosen, rejected}。プロンプトが完全に一致する "
+            "⭐ と ✗ の対だけが入る（chat の /again で出し直すと貯まる）。"
+            "avoid.jsonl のうち対にならなかったものは、同じプロンプトに対する悪い応答では"
+            "ないので ORPO には使えない。数が足りなければ、同じ system+user を素の"
+            "ベースモデル（憲章なし）に投げて rejected を生成して足すのが素直。"
         ),
     }
     (target / "manifest.json").write_text(

@@ -185,6 +185,70 @@ class App:
         del self.exchanges[:-MAX_EXCHANGES]
         return answer, memories
 
+    def again(self, on_token: Callable[[str], None] | None = None) -> Exchange:
+        """直前の発話に、応答を出し直す。
+
+        **プロンプトは組み直さず、前回と同じ messages をそのまま渡す。**
+        そうすると2つの応答が「同じ入力に対する別々の出力」になり、
+        ORPO の (prompt, chosen, rejected) の対がそのまま成立する。
+        ここで想起をやり直してしまうと、比べているものが応答ではなく
+        プロンプトの差になり、対として使えなくなる。
+
+        出し直しを求めたこと自体が「前のは違った」という人間の判断なので、
+        古いほうには ✗ を付ける。ただし ⭐ が付いているものには触らない
+        （気に入ったうえで別案を見たいだけ、ということがある）。
+        """
+        previous = self._exchange(1)
+
+        existing = stars_store.get(self.db, previous.companion_event_id)
+        if existing is None or existing.rating < 0:
+            stars_store.put(
+                self.db,
+                previous.companion_event_id,
+                rating=stars_store.RATING_AVOID,
+                prompt=previous.messages,
+                reason="出し直しを求められた",
+            )
+            archive.mirror_star(
+                self.config.archive_dir,
+                action="avoid",
+                event_id=previous.companion_event_id,
+                session_id=previous.session_id,
+                user_text=previous.user_text,
+                answer=previous.answer,
+                rating=stars_store.RATING_AVOID,
+                reason="出し直しを求められた",
+                prompt=previous.messages,
+            )
+
+        with self.gate.acquire(PRIORITY_CHAT) as cancel:
+            answer = self.llm.chat(
+                previous.messages, task="reply", cancel=cancel, on_token=on_token
+            )
+
+        # meta の replaces が、書き込みパイプラインに「前のは記憶にしなくていい」と伝える。
+        # 古い行を書き換えたり消したりはしない（禁則1）。
+        companion_event = events_store.append(
+            self.db,
+            previous.session_id,
+            events_store.ROLE_COMPANION,
+            answer,
+            meta={"replaces": previous.companion_event_id},
+        )
+        archive.mirror_event(self.config.archive_dir, companion_event)
+
+        exchange = Exchange(
+            session_id=previous.session_id,
+            user_event_id=previous.user_event_id,
+            companion_event_id=companion_event.id,
+            user_text=previous.user_text,
+            answer=answer,
+            messages=previous.messages,  # 同じプロンプト。ここが対の根拠になる
+        )
+        self.exchanges.append(exchange)
+        del self.exchanges[:-MAX_EXCHANGES]
+        return exchange
+
     # --- ⭐（M4: 人格の固定の材料集め） ---
     def star(
         self,

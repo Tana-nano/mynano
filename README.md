@@ -102,6 +102,7 @@ nano> …
 /why              直前の応答でどの記憶を、なぜ引いたか（重み調整はこれを見て行う）
 /recall ミオ       明示検索。薄れた記憶・統合された記憶も掘り起こす
 /focus 引っ越しのこと   いま気にしていること
+/again            同じプロンプトのまま応答を出し直す（前のは ✗ になり、ORPO の対になる）
 /star いい返しだった   いまの応答に ⭐。人格を焼き付けるときの教師データになる
 /avoid 説明くさい      「こうは喋ってほしくない」側の印
 /stars            付けた印の一覧（/unstar で外す）
@@ -147,6 +148,12 @@ python -m nano dataset     # soul/export/train/ に教師データを書き出�
 「モデルが見ていない材料から答えを出す」訓練＝幻覚の訓練になるため。
 同じ理由で、⭐ は**いま話している会話の中の応答にしか付けられない**。
 
+`/again` で応答を出し直すと、**前回とまったく同じプロンプト**で生成し直す。
+古いほうに ✗、新しいほうに ⭐ が付けば、それがそのまま ORPO の
+`{prompt, chosen, rejected}` になる（`soul/export/train/orpo.jsonl`）。
+出し直された古い応答は記憶にしない（撤回した言葉を事実として覚えると想起が濁るため）。
+ただし生ログからは消さない。
+
 `nano dataset` は人格ベースラインが無いと止まる（`nano probe --save-baseline`）。
 **計測が先、学習が後。** 逆にすると、人格が壊れたことに気づけない。
 
@@ -190,7 +197,7 @@ soul/
 ├── archive/YYYY-MM.jsonl    生ログの平文ミラー（追記専用・絶対に消さない）
 ├── archive/stars.jsonl      ⭐ の平文ミラー（プロンプトごと。ここから教師データを組み直せる）
 ├── export/notes/*.md        ノートの Markdown 書き出し（Obsidian でそのまま開ける）
-├── export/train/*.jsonl     ⭐ から作った教師データ（nano dataset）
+├── export/train/*.jsonl     ⭐ から作った教師データ（sft / avoid / orpo。nano dataset）
 ├── backup/soul-*.db         スナップショット
 ├── calibration.json         埋め込みモデルのものさし（実測した類似度分布）
 ├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
@@ -210,7 +217,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 146件。ローカルLLM無しで全部通る
+pytest                                    # 154件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```

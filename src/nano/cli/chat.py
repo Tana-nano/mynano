@@ -21,6 +21,7 @@ HELP = """\
   /why              直前の応答でどの記憶を、なぜ引いたか
   /recall <語>      明示検索（薄れた記憶・統合された記憶も掘り起こす）
   /focus [文]       いま気にしていること（無意識が書き換える場所を手で覗く/置く）
+  /again            同じプロンプトのまま応答を出し直す（前のは ✗ になり、ORPO の対になる）
   /star [n] [理由]  「これがわたしだ」と思った応答に印を付ける（n=いくつ前か。既定1）
   /avoid [n] [理由] 「こうは喋ってほしくない」応答に印を付ける
   /unstar [n]       付けた印を外す
@@ -101,6 +102,18 @@ def run(app: App, session_id: str | None = None) -> int:
                 if argument:
                     state_store.set_value(app.db, state_store.KEY_CURRENT_FOCUS, argument, "human")
                 print("いま気にしていること:", state_store.get(app.db, state_store.KEY_CURRENT_FOCUS) or "(なし)")
+                continue
+            if command == "/again":
+                print(f"{name}> ", end="", flush=True)
+                try:
+                    app.again(on_token=lambda token: print(token, end="", flush=True))
+                except IndexError as error:
+                    print(f"\r{error}")
+                    continue
+                except Exception as error:  # ローカルサーバー未起動などはここに来る
+                    print(f"\n[エラー] {error}", file=sys.stderr)
+                    continue
+                print("\n")
                 continue
             if command == "/star":
                 _mark(app, argument, stars_store.RATING_KEEP)

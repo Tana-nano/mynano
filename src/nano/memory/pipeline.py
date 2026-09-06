@@ -15,7 +15,7 @@ VRAM 8〜16GB ではコール数がそのまま体感速度なので、予算を
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Container, Sequence
 
 from ..config import Config
 from ..embed import Embedder
@@ -47,11 +47,30 @@ class IngestReport:
         )
 
 
-def format_transcript(events: Sequence[Event], companion_name: str) -> str:
+def superseded_ids(events: Sequence[Event]) -> set[int]:
+    """`/again` で出し直された、古いほうの応答の id。
+
+    言い直した前の言葉は記憶にしない。人間もそうしているし、
+    「実際には撤回した発言」を事実として覚えると、想起が静かに濁る。
+    ただし **生ログからは消さない**（禁則1）。エピソードには紐づけて、
+    未処理のまま毎回蒸し返されない状態にしたうえで、要約と原子化の対象から外すだけ。
+    """
+    replaced: set[int] = set()
+    for event in events:
+        target = event.meta.get("replaces")
+        if isinstance(target, int):
+            replaced.add(target)
+    return replaced
+
+
+def format_transcript(
+    events: Sequence[Event], companion_name: str, skip_ids: Container[int] = frozenset()
+) -> str:
     labels = {"user": "ユーザー", "companion": companion_name, "world": "外界"}
     return "\n".join(
         f"[{to_iso(event.ts)}] {labels.get(event.role, event.role)}: {event.content}"
         for event in events
+        if event.id not in skip_ids
     )
 
 
@@ -111,8 +130,12 @@ def ingest_pending(
     report = IngestReport()
     if not pending:
         return report
+    # 出し直された応答は、エピソードには入れるが記憶にはしない
+    skip_ids = superseded_ids(pending)
     for chunk in segment(pending, embedder, config, calibration):
-        _ingest_segment(db, llm, embedder, index, config, chunk, report, calibration)
+        _ingest_segment(
+            db, llm, embedder, index, config, chunk, report, calibration, skip_ids=skip_ids
+        )
     return report
 
 
@@ -125,6 +148,7 @@ def _ingest_segment(
     chunk: Sequence[Event],
     report: IngestReport,
     calibration=None,
+    skip_ids: Container[int] = frozenset(),
 ) -> None:
     companion = config.persona.name
     # リンクを張るかどうかの足切り。キャリブレーション済みなら、そのモデルの
@@ -134,7 +158,21 @@ def _ingest_segment(
         if calibration is not None
         else config.pipeline.link_min_similarity
     )
-    transcript = format_transcript(chunk, companion)
+    transcript = format_transcript(chunk, companion, skip_ids)
+    if not transcript.strip():
+        # 中身が全部「出し直された応答」だった。要約するものが無いので LLM は呼ばない。
+        # それでもエピソードは作る。作らないと未処理のまま毎tick蒸し返される。
+        episode = episodes_store.create(
+            db,
+            session_id=chunk[0].session_id,
+            started_at=chunk[0].ts,
+            ended_at=chunk[-1].ts,
+            summary="",
+            salience=0.0,
+        )
+        events_store.assign_episode(db, [event.id for event in chunk], episode.id)
+        report.episodes += 1
+        return
 
     # ② 要約
     summary_payload = llm.chat_json(

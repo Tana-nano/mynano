@@ -308,6 +308,11 @@ def _dispatch(app: App, args) -> int:
         if not built.keep:
             print("⭐ がまだありません。まずは会話しながら /star を押してください。")
             return 0
+        if not built.pairs and built.avoid:
+            print(
+                "ORPO の対はまだ0件です。chat の中で /again を使うと、"
+                "同じプロンプトに対する ⭐ と ✗ が揃って対になります。"
+            )
         print("学習の順番（CLAUDE.md §8）: 計測 → 少量・低rank → 再計測")
         print("  1. nano probe          （学習前のずれを記録）")
         print("  2. QLoRA（8B / 低rank / ORPO寄り。大量の SFT は人格を薄める）")

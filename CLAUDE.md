@@ -26,10 +26,10 @@
 | M2 無意識デーモン | ✅ 常駐して記憶化・連想・気づき・忘却・整理。外界取り込みと人格変更の承認フロー |
 | M2.5 実機対応 | ✅ 埋め込み同一性の記録とキャリブレーション |
 | M3 グラフ可視化 | ✅ 記憶グラフのビューア（依存ゼロ・外部読み込みゼロ） |
-| **M4 人格の固定** | 🟨 ドリフト計測（`nano probe`）と ⭐ 収集（`/star` / `nano dataset`）は動く。**QLoRA はこれから** |
+| **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。**QLoRA はこれから** |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 5,800 行 / テスト約 2,200 行 / **146 件すべてオフラインで通る**
+- コード約 6,000 行 / テスト約 2,400 行 / **154 件すべてオフラインで通る**
 - ブランチ: `claude/load-and-execute-cfjy3q`（前: `claude/local-persistent-ai-companion-hvbwap`）
 
 ### まだ一度もやっていないこと（重要）
@@ -106,7 +106,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 146件
+pytest                                          # 154件
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -118,7 +118,8 @@ python -m nano chat
 
 主なコマンド: `chat` `daemon` `jobs` `review` `sleep` `decay` `recall` `graph`
 `calibrate` `reembed` `probe` `stars` `dataset` `state` `stats` `export` `backup`
-`chat` の中では `/why` `/recall` `/focus` `/star` `/avoid` `/unstar` `/stars` `/sleep` `/decay` `/stats`
+`chat` の中では `/why` `/recall` `/focus` `/again` `/star` `/avoid` `/unstar` `/stars`
+`/sleep` `/decay` `/stats`
 
 ---
 
@@ -139,6 +140,8 @@ python -m nano chat
 | 密度はしきい値で制御 | **`link_max_per_note`（上限）で制御** | しきい値では崖になる（§7）。上限はモデルに依らず効く |
 | ⭐ は応答に付ける印 | **⭐ はプロンプトと応答の対** | 後で組み直すと想起結果が変わっている。その差で学習すると幻覚を教えることになる。代償として、過去ログを遡って ⭐ は付けられない |
 | `nano dataset` は警告を出すだけ | **ベースラインが無ければ拒否** | 「計測が先」を注意書きにすると必ず飛ばされる。`nano review` と同じく構造上の歯止めにした |
+| ORPO の rejected はベースモデルに生成させる | **`/again` で人間が対を作る** | 出し直しは前回と同じ messages で行うので、応答の差だけが残って対になる。組み直すとプロンプトの差を学ぶことになる |
+| 出し直された応答も記憶にする | **`meta.replaces` を見て記憶から外す** | 撤回した言葉を事実として覚えると想起が濁る。ただし生ログからは消さない（禁則1）。エピソードには紐づけて未処理から外すだけ |
 
 ### 実際に踏んだ罠（再発させない）
 
@@ -214,24 +217,22 @@ python -m nano graph       # ハリボールになっていないか
 順番を守ること。1 と 2 は入った。
 
 1. ✅ ドリフト計測（`nano probe`、固定20問）
-2. ✅ ⭐（`/star` `/avoid` `/unstar` `/stars` → `nano stars` → `nano dataset`）
+2. ✅ ⭐（`/star` `/avoid` `/unstar` `/stars` `/again` → `nano stars` → `nano dataset`）
    - 保存されるのは**プロンプトと応答の対**。理由は §3 の禁則9
+   - `/again` は**前回と同じ messages で**出し直す。想起をやり直さないので、
+     2つの応答が「同じ入力に対する別々の出力」になり ORPO の対として成立する
    - `nano dataset` はベースラインが無いと止まる（`--force` で飛ばせるが既定では止まる）
-   - 出力は `soul/export/train/{sft,avoid}.jsonl` ＋ `manifest.json`。素の JSONL で、
+   - 出力は `soul/export/train/{sft,avoid,orpo}.jsonl` ＋ `manifest.json`。素の JSONL で、
      特定の学習フレームワークに寄せていない
 3. ⬜ ⭐ 付きだけを教師データに QLoRA（8〜16GB なら 8B が現実的）
 4. ⬜ **ORPO 寄り・低rank・小データ。** SFT を大量に回すと persona drift が出る
    （[arXiv:2601.12639](https://arxiv.org/pdf/2601.12639)）
 5. ⬜ **計測が先、学習が後。** 当てる前後で同じ `nano probe` を回す
 
-**3 に進む前に決めること:** ORPO の rejected 側をどう作るか。`avoid.jsonl`（✗ を付けた応答）は
-「同じプロンプトに対する悪い応答」ではないので、そのままでは対にならない。
-素直なのは学習時に、同じ system+user を憲章抜きのベースモデルに投げて生成すること。
-`/again`（同じ発話に応答を出し直す）を足せば対が自然に貯まるが、
-1つの user 発話に companion の応答が2つぶら下がるので、書き込みパイプラインの扱いを先に決める。
-
 **⭐ が何件貯まったら学習するか、はまだ勘。** 数百件が相場だが、実機で ⭐ を押してみないと
 1日に何件付くかも分からない。`nano stats` の `starred` を見ながら決めること。
+ORPO の対（`orpo.jsonl`）は `/again` を押した回数しか貯まらないので、さらに少なくなる。
+足りなければ、同じ system+user を憲章抜きのベースモデルに投げて rejected を足す。
 
 ### M5（偏在化）
 
