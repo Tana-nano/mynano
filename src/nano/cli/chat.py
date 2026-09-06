@@ -12,6 +12,7 @@ from datetime import datetime
 
 from ..app import App
 from ..memory.retrieve import Recall, recall_explicit
+from ..store import stars as stars_store
 from ..store import state as state_store
 from ..store.db import to_iso
 
@@ -20,11 +21,37 @@ HELP = """\
   /why              直前の応答でどの記憶を、なぜ引いたか
   /recall <語>      明示検索（薄れた記憶・統合された記憶も掘り起こす）
   /focus [文]       いま気にしていること（無意識が書き換える場所を手で覗く/置く）
+  /star [n] [理由]  「これがわたしだ」と思った応答に印を付ける（n=いくつ前か。既定1）
+  /avoid [n] [理由] 「こうは喋ってほしくない」応答に印を付ける
+  /unstar [n]       付けた印を外す
+  /stars [件数]     いままでに付けた印
   /sleep            未処理の会話を記憶に変える（書き込みパイプライン）
   /decay            忘却処理を実行する（cold化と統合）
   /stats            記憶の量
   /help /quit
 """
+
+
+def _split_count(argument: str) -> tuple[int, str]:
+    """「/star 3 いい返し」の 3 と理由を分ける。数字が無ければ直近（1）。"""
+    head, _, tail = argument.partition(" ")
+    if head.isdigit():
+        return max(1, int(head)), tail.strip()
+    return 1, argument.strip()
+
+
+def _mark(app: App, argument: str, rating: int) -> None:
+    back, reason = _split_count(argument)
+    try:
+        exchange = app.star(back=back, rating=rating, reason=reason)
+    except IndexError as error:
+        print(error)
+        return
+    label = "⭐" if rating > 0 else "✗"
+    excerpt = exchange.answer[:60] + ("…" if len(exchange.answer) > 60 else "")
+    print(f"{label} {excerpt}")
+    if rating > 0:
+        print("   （このときのプロンプトごと保存しました。nano dataset で教師データになります）")
 
 
 def _read(prompt: str) -> str:
@@ -74,6 +101,33 @@ def run(app: App, session_id: str | None = None) -> int:
                 if argument:
                     state_store.set_value(app.db, state_store.KEY_CURRENT_FOCUS, argument, "human")
                 print("いま気にしていること:", state_store.get(app.db, state_store.KEY_CURRENT_FOCUS) or "(なし)")
+                continue
+            if command == "/star":
+                _mark(app, argument, stars_store.RATING_KEEP)
+                continue
+            if command == "/avoid":
+                _mark(app, argument, stars_store.RATING_AVOID)
+                continue
+            if command == "/unstar":
+                back, _ = _split_count(argument)
+                try:
+                    exchange = app.unstar(back=back)
+                except IndexError as error:
+                    print(error)
+                    continue
+                print("印を外しました。" if exchange else "そこには印が付いていません。")
+                continue
+            if command == "/stars":
+                limit = int(argument) if argument.isdigit() else 10
+                marks = stars_store.recent(app.db, limit=limit)
+                if not marks:
+                    print("まだ何にも印を付けていません。")
+                for turn in marks:
+                    label = "⭐" if turn.star.rating > 0 else "✗"
+                    reason = f"  — {turn.star.reason}" if turn.star.reason else ""
+                    print(f"  {label} {to_iso(turn.ts)[:16]} {turn.answer[:56]}{reason}")
+                counts = stars_store.counts(app.db)
+                print(f"  合計: ⭐{counts['keep']} / ✗{counts['avoid']}")
                 continue
             if command == "/sleep":
                 print(app.ingest())

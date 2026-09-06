@@ -170,3 +170,22 @@ CREATE TABLE IF NOT EXISTS ingested_files (
     digest      TEXT NOT NULL,
     ingested_at REAL NOT NULL
 );
+
+-- ============================================================
+-- M4: 人格の固定（教師データの素材）
+-- ============================================================
+
+-- 11. ⭐。「これがわたしだ」と人間が認めた応答の印。QLoRA の教師データはここからしか作らない。
+--     prompt_json には、その応答を生んだときに実際にモデルへ渡した messages を丸ごと入れる。
+--     あとから組み直すと、想起される記憶が変わっていて別のプロンプトになる。
+--     見ていない材料から答えを出す訓練＝幻覚の訓練になるので、対で保存する。
+CREATE TABLE IF NOT EXISTS stars (
+    event_id    INTEGER PRIMARY KEY REFERENCES events(id),  -- companion 側のイベント
+    rating      INTEGER NOT NULL DEFAULT 1,   -- +1 = こう在ってほしい / -1 = こうは喋ってほしくない
+    reason      TEXT NOT NULL DEFAULT '',
+    prompt_json TEXT NOT NULL DEFAULT '[]',   -- そのとき本当に渡した messages
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL,
+    created_by  TEXT NOT NULL DEFAULT 'human'
+);
+CREATE INDEX IF NOT EXISTS stars_rating ON stars (rating, created_at);

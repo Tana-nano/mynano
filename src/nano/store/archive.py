@@ -4,6 +4,7 @@
 「一生自分のもの」を成立させているのは、実のところこのモジュールである。
 
   archive/YYYY-MM.jsonl   生ログの追記ミラー（1行1イベント）
+  archive/stars.jsonl     ⭐ の追記ミラー（1行1操作。教師データの一次資料）
   export/notes/*.md       ノートの Markdown 書き出し（YAMLフロントマター付き）
 """
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .db import Database, to_iso
+from .db import Database, now as db_now, to_iso
 from .events import Event
 from . import episodes as episodes_store
 from . import notes as notes_store
@@ -32,6 +33,42 @@ def mirror_event(archive_dir: str | Path, event: Event) -> None:
         "meta": event.meta,
     }
     with target.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def mirror_star(
+    archive_dir: str | Path,
+    action: str,
+    event_id: int,
+    session_id: str,
+    user_text: str,
+    answer: str,
+    rating: int = 0,
+    reason: str = "",
+    prompt: list[dict[str, str]] | None = None,
+    ts: float | None = None,
+) -> None:
+    """⭐ の操作を追記する。付けたときも外したときも1行増える（消えない）。
+
+    プロンプトごと平文で残すのは、DB が失われても教師データを組み直せるようにするため。
+    ここが埋まっていれば、nano のコードが全部消えても QLoRA は回せる。
+    """
+    archive_dir = Path(archive_dir)
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    ts = db_now() if ts is None else ts
+    record = {
+        "ts": ts,
+        "time": to_iso(ts),
+        "action": action,          # star | avoid | unstar
+        "rating": rating,
+        "event_id": event_id,
+        "session_id": session_id,
+        "reason": reason,
+        "user": user_text,
+        "answer": answer,
+        "prompt": prompt or [],
+    }
+    with (archive_dir / "stars.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 

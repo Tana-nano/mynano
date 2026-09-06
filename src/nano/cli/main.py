@@ -10,10 +10,12 @@ from .. import calibration as calibration_module
 from ..app import App
 from ..memory import reembed as reembed_module
 from ..memory.retrieve import recall, recall_explicit
+from ..persona import dataset as dataset_module
 from ..persona import drift as drift_module
 from ..store import archive, entities as entities_store, identity as identity_store  # noqa: E501
 from ..store import jobs as jobs_store
-from ..store import proposals as proposals_store, state as state_store
+from ..store import proposals as proposals_store, stars as stars_store
+from ..store import state as state_store
 from ..store.db import to_iso
 from ..unconscious.daemon import Daemon
 from ..viewer import data as graph_data
@@ -73,6 +75,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     probe = sub.add_parser("probe", help="人格プローブを実行し、基準からのずれを測る")
     probe.add_argument("--save-baseline", action="store_true", help="今回の応答を新しい基準にする")
+
+    stars = sub.add_parser("stars", help="⭐ を付けた応答を見る（人格の教師データの素材）")
+    stars.add_argument("--limit", type=int, default=20)
+    stars.add_argument(
+        "--avoid", action="store_true", help="「こうは喋ってほしくない」側だけ見る"
+    )
+
+    dataset = sub.add_parser(
+        "dataset", help="⭐ から QLoRA の教師データを書き出す（soul/export/train/）"
+    )
+    dataset.add_argument(
+        "--force",
+        action="store_true",
+        help="人格ベースラインが無くても書き出す（計測を飛ばすことになる。非推奨）",
+    )
 
     state = sub.add_parser("state", help="working_state の確認と設定")
     state.add_argument("key", nargs="?")
@@ -261,6 +278,40 @@ def _dispatch(app: App, args) -> int:
         for result in report.worst():
             print(f"  {result.similarity:.3f} [{result.probe.category}] {result.probe.prompt}")
             print(f"        → {result.answer[:120]}")
+        return 0
+
+    if args.command == "stars":
+        rating = stars_store.RATING_AVOID if args.avoid else None
+        marks = stars_store.recent(app.db, limit=args.limit, rating=rating)
+        if not marks:
+            print("まだ何にも印が付いていません（nano chat の /star）。")
+        for turn in marks:
+            label = "⭐" if turn.star.rating > 0 else "✗"
+            print(f"{label} {to_iso(turn.ts)[:16]} #{turn.star.event_id}")
+            print(f"    あなた: {turn.user_text[:80]}")
+            print(f"    {app.config.persona.name}: {turn.answer[:80]}")
+            if turn.star.reason:
+                print(f"    理由: {turn.star.reason}")
+        counts = stars_store.counts(app.db)
+        print(f"\n合計: ⭐{counts['keep']} / ✗{counts['avoid']}")
+        return 0
+
+    if args.command == "dataset":
+        try:
+            target, built = dataset_module.export(
+                app.config, app.db, embedding_identity=app.embedder.identity, force=args.force
+            )
+        except dataset_module.BaselineMissing as missing:
+            print(missing, file=sys.stderr)
+            return 2
+        print(f"{built} → {target}")
+        if not built.keep:
+            print("⭐ がまだありません。まずは会話しながら /star を押してください。")
+            return 0
+        print("学習の順番（CLAUDE.md §8）: 計測 → 少量・低rank → 再計測")
+        print("  1. nano probe          （学習前のずれを記録）")
+        print("  2. QLoRA（8B / 低rank / ORPO寄り。大量の SFT は人格を薄める）")
+        print("  3. nano probe          （別人になっていないかを同じ物差しで測る）")
         return 0
 
     if args.command == "state":

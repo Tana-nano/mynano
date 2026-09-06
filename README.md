@@ -23,7 +23,7 @@
 | **M1 記憶コア＋CUI** | ✅ 書き込みパイプライン・想起・忘却・人格プロンプト・CUI・記憶ベンチ |
 | **M2 無意識デーモン** | ✅ 常駐して記憶化・連想・気づき・忘却・整理を回す。外界の取り込みと人格変更の承認フローつき |
 | **M3 グラフ可視化** | ✅ 記憶グラフのビューア。誰が作った記憶かで色分け、単体HTMLに書き出せる |
-| M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）は動く。QLoRA はこれから |
+| M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）と ⭐ による教師データ集め（`/star`）は動く。QLoRA はこれから |
 | M5 偏在化 | ⬜ 音声・アバター・自発発話・外部情報の取り込み |
 
 **M2 の時点で、話しかけていない間も動き続ける。**
@@ -102,6 +102,9 @@ nano> …
 /why              直前の応答でどの記憶を、なぜ引いたか（重み調整はこれを見て行う）
 /recall ミオ       明示検索。薄れた記憶・統合された記憶も掘り起こす
 /focus 引っ越しのこと   いま気にしていること
+/star いい返しだった   いまの応答に ⭐。人格を焼き付けるときの教師データになる
+/avoid 説明くさい      「こうは喋ってほしくない」側の印
+/stars            付けた印の一覧（/unstar で外す）
 /sleep            会話を記憶に変える（書き込みパイプライン）
 /decay            忘却処理（cold化と統合）
 /stats            記憶の量
@@ -128,6 +131,25 @@ python -m nano graph --export soul/graph.html # 単体のHTMLに書き出す
 `soul/inbox/` にテキストファイル（`.txt` `.md` `.json` `.log` `.csv`）を置くと、
 無意識が読んで記憶にする。自分で話したことと同じ扱いになるので、後から普通に想起される。
 
+### ⭐ を付ける（人格を固定するための材料）
+
+「これがわたしだ」と思った応答に、その場で `/star` を押す。
+⭐ が付いたものだけが、将来 QLoRA の教師データになる。会話ログ全部は使わない
+（こちらの相槌もモデルの失敗も等しく学習されて、固定したかった人格が平均に均される）。
+
+```bash
+python -m nano stars       # 付けた印を見る
+python -m nano dataset     # soul/export/train/ に教師データを書き出す
+```
+
+⭐ は**そのとき実際にモデルへ渡したプロンプトごと**保存される。
+あとから組み直すと、想起される記憶が変わっていて別のプロンプトになり、
+「モデルが見ていない材料から答えを出す」訓練＝幻覚の訓練になるため。
+同じ理由で、⭐ は**いま話している会話の中の応答にしか付けられない**。
+
+`nano dataset` は人格ベースラインが無いと止まる（`nano probe --save-baseline`）。
+**計測が先、学習が後。** 逆にすると、人格が壊れたことに気づけない。
+
 ### 人格の変更を承認する
 
 無意識が直接書き換えるのは `current_focus` と `mood` だけ。
@@ -152,6 +174,8 @@ python -m nano graph                 # 記憶グラフをブラウザで見る
 python -m nano calibrate             # 埋め込みモデルのものさしを実測する
 python -m nano reembed               # 記憶を今の埋め込みモデルで埋め直す
 python -m nano probe                 # 人格プローブ。基準からのずれを測る
+python -m nano stars                 # ⭐ を付けた応答を見る
+python -m nano dataset               # ⭐ から QLoRA の教師データを書き出す
 python -m nano state                 # working_state（無意識が書き換える場所）を覗く
 python -m nano state current_focus --history   # 書き換えの監査ログ
 ```
@@ -164,7 +188,9 @@ python -m nano state current_focus --history   # 書き換えの監査ログ
 soul/
 ├── soul.db                  記憶の本体（SQLite 1ファイル）
 ├── archive/YYYY-MM.jsonl    生ログの平文ミラー（追記専用・絶対に消さない）
+├── archive/stars.jsonl      ⭐ の平文ミラー（プロンプトごと。ここから教師データを組み直せる）
 ├── export/notes/*.md        ノートの Markdown 書き出し（Obsidian でそのまま開ける）
+├── export/train/*.jsonl     ⭐ から作った教師データ（nano dataset）
 ├── backup/soul-*.db         スナップショット
 ├── calibration.json         埋め込みモデルのものさし（実測した類似度分布）
 ├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
@@ -184,7 +210,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 133件。ローカルLLM無しで全部通る
+pytest                                    # 146件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```

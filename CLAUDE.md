@@ -26,11 +26,11 @@
 | M2 無意識デーモン | ✅ 常駐して記憶化・連想・気づき・忘却・整理。外界取り込みと人格変更の承認フロー |
 | M2.5 実機対応 | ✅ 埋め込み同一性の記録とキャリブレーション |
 | M3 グラフ可視化 | ✅ 記憶グラフのビューア（依存ゼロ・外部読み込みゼロ） |
-| **M4 人格の固定** | 🟨 ドリフト計測（`nano probe`）は動く。**QLoRA はこれから** |
+| **M4 人格の固定** | 🟨 ドリフト計測（`nano probe`）と ⭐ 収集（`/star` / `nano dataset`）は動く。**QLoRA はこれから** |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 5,500 行 / テスト約 2,000 行 / **134 件すべてオフラインで通る**
-- ブランチ: `claude/local-persistent-ai-companion-hvbwap`
+- コード約 5,800 行 / テスト約 2,200 行 / **146 件すべてオフラインで通る**
+- ブランチ: `claude/load-and-execute-cfjy3q`（前: `claude/local-persistent-ai-companion-hvbwap`）
 
 ### まだ一度もやっていないこと（重要）
 
@@ -64,6 +64,10 @@
    σ 単位で持ち、`nano calibrate` で実測する。
 8. **オフラインで全テストが通る状態を保つ。** `OfflineLLM` + `HashEmbedder` で
    全系が回る。ローカルLLMが無くても回帰を検出できることが、長く手を入れる前提。
+9. **教師データのプロンプトを後から組み直さない。** ⭐ は「応答」ではなく
+   「そのとき渡した messages と応答の対」で保存する。組み直すと想起される記憶が変わり、
+   モデルが見ていない材料から答えを出す訓練＝**幻覚の訓練**になる。憲章の最重要禁則と衝突する。
+   だから ⭐ はいま話している会話の中にしか打てない（`App.star` が構造的に塞いでいる）。
 
 ---
 
@@ -80,11 +84,11 @@ src/nano/
 ├── calibration.py    そのモデルの類似度分布を実測し、しきい値をσ単位にする
 ├── offline.py        GPU無しで全系を通すスタブLLM。**テストの土台**
 ├── store/            記憶ストア。db / events / episodes / notes / graph / entities
-│                     / state / jobs / proposals / identity / archive / schema.sql
+│                     / state / jobs / proposals / identity / stars / archive / schema.sql
 ├── memory/           pipeline（書き込み）/ retrieve（想起）/ decay（忘却）
 │                     / reembed / prompts
 ├── unconscious/      daemon.py + jobs/（write, associate, reflect, decay, curate, ingest）
-├── persona/          compose（システムプロンプト構築）/ probes / drift
+├── persona/          compose（システムプロンプト構築）/ probes / drift / dataset（⭐→教師データ）
 └── viewer/           data（グラフ組み立て）/ page / server / index.html
 ```
 
@@ -102,7 +106,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 134件
+pytest                                          # 146件
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -113,7 +117,8 @@ python -m nano chat
 ```
 
 主なコマンド: `chat` `daemon` `jobs` `review` `sleep` `decay` `recall` `graph`
-`calibrate` `reembed` `probe` `state` `stats` `export` `backup`
+`calibrate` `reembed` `probe` `stars` `dataset` `state` `stats` `export` `backup`
+`chat` の中では `/why` `/recall` `/focus` `/star` `/avoid` `/unstar` `/stars` `/sleep` `/decay` `/stats`
 
 ---
 
@@ -132,6 +137,8 @@ python -m nano chat
 | FastAPI + Cytoscape.js | **http.server + 自前Canvas** | CDN依存はネットが無いと魂が見えなくなる。依存も増える |
 | グラフの色＝カテゴリ | **色＝誰が作った記憶か（3色）** | 任意の2点が隣り合うグラフで色覚検証を通るのは3色まで。そして実際に見たいのは分類ではなく「自分が話した/無意識が考えた/外から来た」の区別 |
 | 密度はしきい値で制御 | **`link_max_per_note`（上限）で制御** | しきい値では崖になる（§7）。上限はモデルに依らず効く |
+| ⭐ は応答に付ける印 | **⭐ はプロンプトと応答の対** | 後で組み直すと想起結果が変わっている。その差で学習すると幻覚を教えることになる。代償として、過去ログを遡って ⭐ は付けられない |
+| `nano dataset` は警告を出すだけ | **ベースラインが無ければ拒否** | 「計測が先」を注意書きにすると必ず飛ばされる。`nano review` と同じく構造上の歯止めにした |
 
 ### 実際に踏んだ罠（再発させない）
 
@@ -204,13 +211,27 @@ python -m nano graph       # ハリボールになっていないか
 
 ### M4（人格の固定）
 
-`nano probe`（固定20問のドリフト計測）は動く。次は QLoRA。順番を守ること:
+順番を守ること。1 と 2 は入った。
 
-1. 会話ログに人間が ⭐ を付ける仕組み（CUI に `/star`）
-2. ⭐ 付きだけを教師データに QLoRA（8〜16GB なら 8B が現実的）
-3. **ORPO 寄り・低rank・小データ。** SFT を大量に回すと persona drift が出る
+1. ✅ ドリフト計測（`nano probe`、固定20問）
+2. ✅ ⭐（`/star` `/avoid` `/unstar` `/stars` → `nano stars` → `nano dataset`）
+   - 保存されるのは**プロンプトと応答の対**。理由は §3 の禁則9
+   - `nano dataset` はベースラインが無いと止まる（`--force` で飛ばせるが既定では止まる）
+   - 出力は `soul/export/train/{sft,avoid}.jsonl` ＋ `manifest.json`。素の JSONL で、
+     特定の学習フレームワークに寄せていない
+3. ⬜ ⭐ 付きだけを教師データに QLoRA（8〜16GB なら 8B が現実的）
+4. ⬜ **ORPO 寄り・低rank・小データ。** SFT を大量に回すと persona drift が出る
    （[arXiv:2601.12639](https://arxiv.org/pdf/2601.12639)）
-4. **計測が先、学習が後。** 逆にすると人格が壊れたことに気づけない
+5. ⬜ **計測が先、学習が後。** 当てる前後で同じ `nano probe` を回す
+
+**3 に進む前に決めること:** ORPO の rejected 側をどう作るか。`avoid.jsonl`（✗ を付けた応答）は
+「同じプロンプトに対する悪い応答」ではないので、そのままでは対にならない。
+素直なのは学習時に、同じ system+user を憲章抜きのベースモデルに投げて生成すること。
+`/again`（同じ発話に応答を出し直す）を足せば対が自然に貯まるが、
+1つの user 発話に companion の応答が2つぶら下がるので、書き込みパイプラインの扱いを先に決める。
+
+**⭐ が何件貯まったら学習するか、はまだ勘。** 数百件が相場だが、実機で ⭐ を押してみないと
+1日に何件付くかも分からない。`nano stats` の `starred` を見ながら決めること。
 
 ### M5（偏在化）
 
