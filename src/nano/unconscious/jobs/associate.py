@@ -11,7 +11,7 @@ from __future__ import annotations
 import random
 
 from ...memory import prompts
-from ...memory.decay import initial_half_life, retrievability
+from ...memory.decay import SECONDS_PER_DAY, initial_half_life, retrievability
 from ...store import graph as graph_store
 from ...store import notes as notes_store
 from ...store.db import now
@@ -19,10 +19,44 @@ from ...store.db import now
 RELATIONS = {"similar", "elaborates", "causes", "contradicts"}
 
 
+def _neglect_weight(note: notes_store.Note, at: float) -> float:
+    """しばらく思い出していない記憶ほど、道連れに選ばれやすくする。
+
+    重要度は一切見ない。ここで重要度をかけると、いつも同じ重要な記憶ばかりが
+    連想の相手に選ばれるようになる。それは §6 の罠（連想強化を一律にかけて
+    どうでもいい記憶が生き延びた）の裏返しで、今度は「重要でない記憶は
+    いつまで経っても誰とも引き合わされない」という別の偏りになる。
+    連想の相手を選ぶ基準は「最近思い出したか」だけにする。
+    """
+    days_since = max(0.0, (at - note.last_accessed_at) / SECONDS_PER_DAY)
+    return days_since + 1.0
+
+
+def _weighted_sample_without_replacement(
+    pool: list[notes_store.Note], weights: list[float], k: int
+) -> list[notes_store.Note]:
+    """重み付きで、かつ重複無しに k 件引く。
+
+    `random.choices` は重複ありにしか使えないので、選んでは除く、を繰り返す。
+    候補は多くても数千件規模なので、この素朴さで困らない。
+    """
+    remaining_notes = list(pool)
+    remaining_weights = list(weights)
+    chosen: list[notes_store.Note] = []
+    for _ in range(min(k, len(remaining_notes))):
+        index = random.choices(range(len(remaining_notes)), weights=remaining_weights, k=1)[0]
+        chosen.append(remaining_notes.pop(index))
+        remaining_weights.pop(index)
+    return chosen
+
+
 def sample(app, count: int, at: float | None = None) -> list[notes_store.Note]:
-    """1件は「思い出しやすい記憶」から、残りは無作為に引く。
+    """1件は「思い出しやすい記憶」から、残りは「しばらく思い出していない記憶」を優先して引く。
 
     全部を重要度で引くと、いつも同じ顔ぶれが並んで新しい繋がりが生まれない。
+    かといって道連れまで重要度で選ぶと、逆に地味な記憶がいつまでも
+    誰とも引き合わされなくなる。だから道連れは `last_accessed_at` の古さだけで
+    重み付けし、無作為に（重複無しで）引く。
     既にリンクがある相手は候補から外す。既知の関係を再発見しても意味がないので。
     """
     at = now() if at is None else at
@@ -50,7 +84,8 @@ def sample(app, count: int, at: float | None = None) -> list[notes_store.Note]:
         pool = [note for note in active if note.id != seed.id]
     if not pool:
         return []
-    others = random.sample(pool, k=min(count - 1, len(pool)))
+    companion_weights = [_neglect_weight(note, at) for note in pool]
+    others = _weighted_sample_without_replacement(pool, companion_weights, count - 1)
     return [seed, *others]
 
 

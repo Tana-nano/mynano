@@ -6,14 +6,17 @@ current_focus は勝手に変わってよいが、identity は人間の承認な
 
 from __future__ import annotations
 
+import random
+
 from nano.store import graph as graph_store
 from nano.store import jobs as jobs_store
 from nano.store import notes as notes_store
 from nano.store import proposals as proposals_store
 from nano.store import state as state_store
+from nano.store.db import now as db_now
 from nano.unconscious.jobs import associate, curate, ingest, reflect, remember
 
-from conftest import converse
+from conftest import DAY, converse
 
 CONVERSATION = [
     "妹の名前はミオ。高校生で吹奏楽部にいる",
@@ -62,6 +65,42 @@ def test_associate_falls_back_when_everything_is_linked(app):
     second = add_note(app, "ミオはトランペットを吹く")
     graph_store.add(app.db, first.id, second.id, "similar", 0.9, symmetric=True)
     assert len(associate.sample(app, count=2)) == 2
+
+
+def test_associate_prefers_neglected_companions(app):
+    """道連れは重要度で選ばない。長く思い出していない記憶ほど選ばれやすくすること。"""
+    at = db_now()
+    fresh_ids = [add_note(app, f"最近思い出した記憶{i}", importance=0.5).id for i in range(3)]
+    stale_ids = [
+        add_note(app, f"ずっと思い出していない記憶{i}", importance=0.5).id for i in range(3)
+    ]
+    # 実際に「久しく思い出していない」状態を last_accessed_at で作る。
+    for note_id in stale_ids:
+        app.db.execute(
+            "UPDATE notes SET last_accessed_at=? WHERE id=?", (at - 200 * DAY, note_id)
+        )
+    # cold な記憶（高重要度）も混ぜて、絶対に選ばれないことを確かめる。
+    cold_note = add_note(app, "もう思い出さない記憶", importance=0.9)
+    app.db.execute(
+        "UPDATE notes SET last_accessed_at=? WHERE id=?", (at - 400 * DAY, cold_note.id)
+    )
+    notes_store.set_state(app.db, cold_note.id, notes_store.STATE_COLD)
+
+    random.seed(20260909)
+    picks = {note_id: 0 for note_id in fresh_ids + stale_ids}
+    trials = 300
+    for _ in range(trials):
+        drawn = associate.sample(app, count=3, at=at)
+        for note in drawn:
+            assert note.id != cold_note.id, "cold な記憶は絶対に道連れにしない"
+            if note.id in picks:
+                picks[note.id] += 1
+
+    fresh_total = sum(picks[i] for i in fresh_ids)
+    stale_total = sum(picks[i] for i in stale_ids)
+    assert stale_total > fresh_total * 2, (
+        f"長く思い出していない記憶が優先されていない: stale={stale_total} fresh={fresh_total}"
+    )
 
 
 def test_associate_creates_links_and_an_insight(app):
