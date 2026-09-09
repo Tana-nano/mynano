@@ -29,7 +29,7 @@
 | **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。QLoRA は**設計まで**（`docs/finetune.md`）。当てるのは実機待ち |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 6,500 行 / テスト約 3,000 行 / **214 件すべてオフラインで通る**
+- コード約 6,500 行 / テスト約 3,000 行 / **216 件すべてオフラインで通る**
 - ブランチ: `claude/denshi-maid-nano-design-x441c3`
   （前: `claude/load-and-execute-cfjy3q` → `claude/local-persistent-ai-companion-hvbwap`）
 
@@ -299,7 +299,7 @@ Project AIRI 等に記憶コアを接続（音声・VRM）、`impulse` ジョブ
 
 ### 積み残し
 
-- グラフの力学レイアウトは O(n²)。数千件になったら格子分割か Barnes-Hut が要る
+- グラフの力学レイアウトは Barnes-Hut（θ=0.8）にした。実測 3000件で 657→72 ms/tick、400件で 9.5→3.4 ms/tick。見た目は同等（スクリーンショットで確認）。`docs/graph.md`
 - `associate` の道連れは `last_accessed_at` の古さで重み付け（重要度は見ない。§6 の罠の裏返しを避けるため）。温度の調整は実機で
 
 ---
