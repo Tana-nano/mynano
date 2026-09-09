@@ -23,7 +23,7 @@
 | **M1 記憶コア＋CUI** | ✅ 書き込みパイプライン・想起・忘却・人格プロンプト・CUI・記憶ベンチ |
 | **M2 無意識デーモン** | ✅ 常駐して記憶化・連想・気づき・忘却・整理を回す。外界の取り込みと人格変更の承認フローつき |
 | **M3 グラフ可視化** | ✅ 記憶グラフのビューア。誰が作った記憶かで色分け、単体HTMLに書き出せる |
-| M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）と ⭐ による教師データ集め（`/star`）は動く。QLoRA はこれから |
+| M4 人格の固定 | 🟨 ドリフト計測（`nano probe`）と ⭐ による教師データ集め（`/star` → `nano dataset`）は動く。QLoRA は**設計まで**（[docs/finetune.md](docs/finetune.md)。骨は `train/` にある）。当てるのは実機待ち |
 | M5 偏在化 | ⬜ 音声・アバター・自発発話・外部情報の取り込み |
 
 **M2 の時点で、話しかけていない間も動き続ける。**
@@ -73,7 +73,9 @@ python -m nano chat
 
 `doctor` は何も直さない。詰まりどころをまとめて出すだけで、直し方は自分で選ぶ
 （魂に触る操作を点検の副作用でやると、一番壊れてほしくないものが
-一番不注意な瞬間に壊れる）。
+一番不注意な瞬間に壊れる）。LoRA を当てているときは `config.toml` の
+`[llm] adapter`（下記）と、llama-server が実際に積んでいるアダプタが
+一致しているかも突き合わせる。
 
 `calibrate` を飛ばすと、しきい値が `config.toml` の絶対値のまま使われる。
 コサインの絶対値はモデルごとに全く違う帯に分布するので、**初回は必ず回すこと**。
@@ -83,6 +85,11 @@ python -m nano chat
 埋め込みモデルを差し替えるときは [docs/models.md](docs/models.md) の手順に従う。
 別のモデルで作ったベクトルが混ざると想起が静かに壊れるので、
 **モデルが変わっていると起動を止める**ようにしてある。
+
+LoRA アダプタを当てているときは、`config.toml` の `[llm] adapter = "nano-v1@0.7"` に
+その名札を人間が書く（対話用の OpenAI 互換 API にはアダプタが出てこないため）。
+この名札は `nano probe` の計測記録と ⭐ の1件ごとに刻まれ、`nano doctor` が
+llama-server 側の申告と突き合わせて裏を取る。
 
 ### 4. 無意識を常駐させる
 
@@ -161,6 +168,19 @@ python -m nano dataset     # soul/export/train/ に教師データを書き出�
 
 `nano dataset` は人格ベースラインが無いと止まる（`nano probe --save-baseline`）。
 **計測が先、学習が後。** 逆にすると、人格が壊れたことに気づけない。
+書き出すたびに件数の内訳（教師データ / 避けたい応答 / ORPO の対）と、
+⭐ が複数の LoRA 世代にまたがっていないかを出す
+（世代をまたいだ対は作らない。混ぜると訛りが自己増幅するため）。
+
+### QLoRA を当てる
+
+順番は `docs/finetune.md` §4 の通り: ①**実機のベースモデルで、アダプタを外した状態**で
+`nano probe --save-baseline`（ここが原点。あとから取り直すと比較相手が消える）
+→ ②`nano dataset` → ③別 venv で学習（[`train/README.md`](train/README.md)、completion-only loss）
+→ ④GGUF に変換して `--lora-scaled` で読ませる → ⑤`config.toml` の `adapter` を書き換える
+→ ⑥同じ物差しで `nano probe` を測り直す → ⑦`nano leak`
+（記憶の焼き付き検査。想起なしで固有名詞を問い、答えたら失格。漏れがあれば終了コード 2）。
+詳細は [docs/finetune.md](docs/finetune.md)。
 
 ### 人格の変更を承認する
 
@@ -185,10 +205,11 @@ python -m nano backup                # soul.db のスナップショット
 python -m nano graph                 # 記憶グラフをブラウザで見る
 python -m nano calibrate             # 埋め込みモデルのものさしを実測する
 python -m nano reembed               # 記憶を今の埋め込みモデルで埋め直す
-python -m nano doctor                # 実機に載せる前の点検
-python -m nano probe                 # 人格プローブ。基準からのずれを測る
+python -m nano doctor                # 実機に載せる前の点検（アダプタの名札も裏取り）
+python -m nano probe                 # 人格プローブ。測定条件つきで基準からのずれを測る
+python -m nano leak                  # 記憶の焼き付き検査（想起なしで固有名詞を問う）
 python -m nano stars                 # ⭐ を付けた応答を見る
-python -m nano dataset               # ⭐ から QLoRA の教師データを書き出す
+python -m nano dataset               # ⭐ から QLoRA の教師データを書き出す（世代の内訳つき）
 python -m nano state                 # working_state（無意識が書き換える場所）を覗く
 python -m nano state current_focus --history   # 書き換えの監査ログ
 ```
@@ -209,7 +230,9 @@ soul/
 ├── inbox/                   ここに置いたファイルを無意識が読んで記憶にする
 │   └── processed/           読み終えたファイル
 ├── log/                     デーモンのログ（unconscious.log。日次ローテーション・既定30日）
-└── persona_baseline.json    人格プローブの基準応答
+├── persona_baseline.json    人格プローブの基準応答（測定条件つき。埋め込み空間が違えば比較を断る）
+├── leak_last.json           記憶の焼き付き検査（nano leak）の最新結果。再生成可能な計測記録
+└── lora/<name>/             LoRA アダプタ（.gguf）と manifest.json。⭐ から作り直せる、**魂ではない**もの
 ```
 
 **このディレクトリを丸ごとコピーすれば、それが引っ越しであり、バックアップである。**
@@ -223,7 +246,7 @@ soul/
 ## テストとベンチ
 
 ```bash
-pytest                                    # 188件。ローカルLLM無しで全部通る
+pytest                                    # 214件。ローカルLLM無しで全部通る
 python tests/bench/memory_bench.py        # 記憶ベンチ（スタブ）
 python tests/bench/memory_bench.py --online   # 実際のローカルモデルで
 ```
@@ -249,7 +272,8 @@ python tests/bench/memory_bench.py --online   # 実際のローカルモデル�
 - [docs/models.md](docs/models.md) — モデルの差し替え手順とキャリブレーション
 - [docs/graph.md](docs/graph.md) — 記憶グラフの見方
 - [docs/memory-model.md](docs/memory-model.md) — スキーマ・想起スコア・忘却曲線
-- [docs/persona.md](docs/persona.md) — 人格3層とドリフト計測
+- [docs/persona.md](docs/persona.md) — 人格3層とドリフト計測、⭐
+- [docs/finetune.md](docs/finetune.md) — QLoRA（M4-3）の設計。当てる前にここを読む
 - [docs/prior-art.md](docs/prior-art.md) — 既出の研究・実装と、何を借りて何を借りなかったか
 - [docs/roadmap.md](docs/roadmap.md) — M3 以降
 
