@@ -28,6 +28,8 @@ class Script:
     seen: list[dict] = field(default_factory=list)
     # 1トークンぶん流すたびに呼ばれる（中断の再現用）
     on_chunk: Callable[[], None] | None = None
+    # GET /lora-adapters の応答。None = そのエンドポイントを持たないサーバー（404）。
+    lora_adapters: list | None = None
 
     def next_reply(self):
         return self.replies.pop(0) if self.replies else "（応答）"
@@ -50,6 +52,22 @@ class _Handler(BaseHTTPRequestHandler):
             # クライアントが中断で接続を切った。実機でも同じことが起きる（そして
             # それが狙い: 接続が切れれば llama-server 側の生成も止まる）。
             pass
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler の規約
+        if self.path.endswith("/lora-adapters"):
+            self._lora_adapters()
+        else:
+            self.send_error(404)
+
+    def _lora_adapters(self) -> None:
+        # サーバー直下（/v1 の外）のエンドポイント。llama-server 固有で OpenAI 互換 API には無い。
+        if self.script.lora_adapters is None:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(self.script.lora_adapters).encode("utf-8"))
 
     def _dispatch(self) -> None:
         payload = self._body()

@@ -10,7 +10,8 @@ soul_dir = "soul"
 base_url = "http://localhost:8080/v1"
 model = "local"
 # いま llama-server に読ませている LoRA アダプタの名札。空 = 素のモデル。
-# nano 側からは検出できない（OpenAI互換APIには出てこない）ので、人間が書く。
+# 対話用の OpenAI 互換 API にはアダプタが出てこないので、人間が書く（真実の記録はこちら）。
+# `nano doctor` が llama-server の /lora-adapters と突き合わせて裏を取る（裏取りできる版のみ）。
 # 人格の計測記録と ⭐ の1件ごとに刻まれる。当て替えたら必ず変えること。docs/finetune.md
 adapter = ""
 api_key = ""

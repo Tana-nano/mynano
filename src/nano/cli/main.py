@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--now", action="store_true", help="アイドルを待たずに動かす（夜間処理を手で走らせる用）"
     )
 
-    sub.add_parser("doctor", help="実機に載せる前の点検（繋がるか・次元・ものさし・基準）")
+    sub.add_parser("doctor", help="実機に載せる前の点検（繋がるか・次元・ものさし・基準・アダプタ）")
     sub.add_parser("jobs", help="無意識のジョブキューを見る")
     sub.add_parser("review", help="無意識からの人格変更の提案を承認/却下する")
 

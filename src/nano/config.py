@@ -18,7 +18,8 @@ class LLMConfig:
     base_url: str = "http://localhost:8080/v1"
     model: str = "local"
     # いま llama-server に読ませている LoRA アダプタの名札。
-    # nano 側からは検出できない（OpenAI互換APIには出てこない）ので、人間が書く。
+    # 対話用の OpenAI 互換 API にはアダプタが出てこないので、人間が書く（真実の記録はこちら）。
+    # `nano doctor` が llama-server の /lora-adapters と突き合わせて裏を取る（doctor.py）。
     # 人格の計測記録に刻まれる値なので、当て替えたら必ず変えること。docs/finetune.md
     adapter: str = ""
     api_key: str = ""

@@ -18,6 +18,8 @@ import os
 import time
 from dataclasses import dataclass
 
+import httpx
+
 from . import calibration as calibration_module
 from .config import Config
 from .embed import HashEmbedder, build_embedder
@@ -80,6 +82,9 @@ def run(config: Config) -> Report:
     try:
         findings.append(_soul(db))
         findings += _llm(config)
+        adapter_finding = _adapter(config)
+        if adapter_finding is not None:
+            findings.append(adapter_finding)
         embed_finding, live_identity = _embedder(config)
         findings.append(embed_finding)
         findings.append(_identity(db, live_identity))
@@ -145,6 +150,68 @@ def _llm(config: Config) -> list[Finding]:
             f"{config.llm.base_url} 応答あり（{elapsed:.1f}秒 / {answer[:40]!r}）",
         )
     ]
+
+
+def _adapter(config: Config) -> Finding | None:
+    """`[llm] adapter` の名札を、llama-server 自身の申告と突き合わせる。
+
+    OpenAI 互換 API にはアダプタが出てこないので、その経路では名札を信じるしかない。
+    ただし llama-server 固有の `GET /lora-adapters`（サーバー直下、/v1 の外）で
+    いま積んでいるアダプタを申告してくる版があるので、通れば照合する。
+    通らないサーバー（別実装、古い版）では照合を諦めるだけで、FAIL にはしない。
+    """
+    label = config.llm.adapter.strip()
+    root = config.llm.base_url.rstrip("/")
+    if not root:
+        return None
+    if root.endswith("/v1"):
+        root = root[: -len("/v1")]
+    root = root.rstrip("/")
+
+    try:
+        with httpx.Client(trust_env=False, timeout=min(config.llm.timeout_s, 10.0)) as client:
+            response = client.get(f"{root}/lora-adapters")
+            response.raise_for_status()
+            payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        if label:
+            return Finding(
+                WARN,
+                "LoRA アダプタ",
+                f"サーバーが /lora-adapters に応答しないので、名札 '{label}' を照合できない"
+                "（llama-server 以外か古い版）",
+            )
+        return Finding(
+            OK,
+            "LoRA アダプタ",
+            "名札は空。サーバーは /lora-adapters に応答しないので、そもそも照合できていません",
+        )
+
+    loaded = [item for item in payload if item.get("scale", 1.0) > 0]
+
+    if not label and not loaded:
+        return Finding(OK, "LoRA アダプタ", "素のモデル（アダプタなし）")
+
+    if not label and loaded:
+        names = "、".join(f"{item.get('path', '?')}@{item.get('scale')}" for item in loaded)
+        return Finding(
+            FAIL,
+            "LoRA アダプタ",
+            f"サーバーには {names} が積まれていますが、config.toml の adapter は空です。"
+            "このままだと計測記録と ⭐ の出どころが嘘になります",
+            'config.toml の [llm] adapter = "<名前>@<scale>" を書く',
+        )
+
+    if label and not loaded:
+        return Finding(
+            FAIL,
+            "LoRA アダプタ",
+            f"config.toml の adapter は '{label}' ですが、サーバーには何も積まれていません",
+            "llama-server を --lora-scaled <adapter> <scale> で起動し直すか、adapter を空に戻す",
+        )
+
+    names = "、".join(f"{item.get('path', '?')}@{item.get('scale')}" for item in loaded)
+    return Finding(OK, "LoRA アダプタ", f"名札: {label} / サーバー申告: {names}")
 
 
 def _embedder(config: Config) -> tuple[Finding, str]:
