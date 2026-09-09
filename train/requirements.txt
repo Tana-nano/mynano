@@ -1,0 +1,11 @@
+# train/ 専用。nano の依存ではない（禁則3）。別の venv に入れる:
+#   python -m venv .venv-train && .venv-train\Scripts\pip install -r train/requirements.txt
+# 版は固定していない。この環境は毎回作り直して捨ててよいもので、魂の一部ではない。
+# torch は CUDA 版を公式の手順で先に入れること（https://pytorch.org/get-started/locally/）。
+torch
+transformers
+peft
+bitsandbytes
+trl
+datasets
+accelerate

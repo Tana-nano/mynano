@@ -6,3 +6,6 @@ __pycache__/
 # 魂の実体。絶対に共有リポジトリへ入れない。
 soul/
 models/
+
+# サブエージェントの作業用 worktree（コミットしない）
+.claude/worktrees/

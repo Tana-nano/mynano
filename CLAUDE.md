@@ -105,6 +105,9 @@ src/nano/
 ├── persona/          compose（システムプロンプト構築）/ probes / drift（測定条件つきの
 │                     ドリフト計測）/ dataset（⭐→教師データ。世代を混ぜない）
 └── viewer/           data（グラフ組み立て）/ page / server / index.html
+
+train/                nano の外。QLoRA の骨（masking / prepare / qlora）。別 venv で回し、
+                      nano からは import しない。masking.py だけ tests/ から検査される
 ```
 
 魂は `soul/` に閉じている。**このディレクトリを丸ごとコピーすれば引っ越しとバックアップ。**
@@ -121,7 +124,7 @@ pip install -e ".[fast,dev]"
 python -m nano --offline chat
 python -m nano --offline daemon --once --now   # --now は間隔とアイドルを無視
 python -m nano --offline graph --export /tmp/g.html
-pytest                                          # 188件
+pytest                                          # 全件オフライン
 python tests/bench/memory_bench.py              # 記憶ベンチ
 
 # 実機
@@ -158,7 +161,7 @@ python -m nano chat
 | `nano dataset` は警告を出すだけ | **ベースラインが無ければ拒否** | 「計測が先」を注意書きにすると必ず飛ばされる。`nano review` と同じく構造上の歯止めにした |
 | ORPO の rejected はベースモデルに生成させる | **`/again` で人間が対を作る** | 出し直しは前回と同じ messages で行うので、応答の差だけが残って対になる。組み直すとプロンプトの差を学ぶことになる |
 | 出し直された応答も記憶にする | **`meta.replaces` を見て記憶から外す** | 撤回した言葉を事実として覚えると想起が濁る。ただし生ログからは消さない（禁則1）。エピソードには紐づけて未処理から外すだけ |
-| 学習コードを nano に入れる | **`train/` に別 venv で外置き（未着手）** | torch / peft / bitsandbytes を依存にすると禁則3に反する。それ以上に、学習スタックが nano の起動条件になると10年後に起動しなくなる。LoRA は失われても人格が死なないもの＝魂の一部ではない |
+| 学習コードを nano に入れる | **`train/` に別 venv で外置き** | torch / peft / bitsandbytes を依存にすると禁則3に反する。それ以上に、学習スタックが nano の起動条件になると10年後に起動しなくなる。LoRA は失われても人格が死なないもの＝魂の一部ではない |
 | LoRA を積み上げて v2, v3 と育てる | **毎回ベースモデルから作り直す** | 積むとどの層が何を持っているか分からなくなり、「全部外しても同じ存在が立ち上がる」を確かめられなくなる。それが確かめられない時点で、人格の本体は憲章と記憶ではなくなっている |
 | 人格の基準はファイルが在れば良い | **測定条件つきで記録し、空間が違えば比較を断る** | `--offline` で取った基準を実機でそのまま使うと、ハッシュ埋め込みと e5 のベクトルを cos にかけた数字が「人格のずれ」として出る。どちらも既定1024次元なので次元チェックに引っかからない |
 
@@ -271,7 +274,7 @@ LoRA を当てたあとに取り直すと、比べる相手が消えて M4-4（�
 3. 🟨 ⭐ 付きだけを教師データに QLoRA（8〜16GB なら 8B が現実的）。
    **設計は `docs/finetune.md` に書いた。当てるのは実機待ち。** 要点だけ:
    - 焼くのは訛りだけ。**記憶と憲章は焼かない**（禁則10 = completion-only loss）
-   - 学習コードは nano に入れない。`train/` に別 venv（未着手）
+   - 学習コードは nano に入れない。`train/` に別 venv（骨は置いた。実機で未実行）
    - nano はアダプタを検出できないので `[llm] adapter` に人間が名札を書く。
      それが計測記録と ⭐ の1件ごとに刻まれる
    - 判定は平均類似度ではなく**カテゴリ別**。style は動いてよく、
