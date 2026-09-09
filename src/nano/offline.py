@@ -73,6 +73,9 @@ class OfflineLLM:
 
     max_notes: int = 12
     handlers: dict[str, Callable[[Sequence[dict]], Any]] = field(default_factory=dict)
+    # 人格の計測記録に「これはスタブで取った数字だ」と残すための名札。
+    # 実機のモデル名と混ざらないようにする（docs/finetune.md）。
+    model: str = "offline-stub"
 
     def chat(
         self,

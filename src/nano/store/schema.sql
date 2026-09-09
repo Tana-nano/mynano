@@ -186,6 +186,10 @@ CREATE TABLE IF NOT EXISTS stars (
     prompt_json TEXT NOT NULL DEFAULT '[]',   -- そのとき本当に渡した messages
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL,
-    created_by  TEXT NOT NULL DEFAULT 'human'
+    created_by  TEXT NOT NULL DEFAULT 'human',
+    -- その応答を出したモデルとアダプタ。M4 で LoRA を当てたあとも ⭐ は貯まり続けるので、
+    -- 世代を混ぜずに「どの版の応答に印を付けたか」を追えるようにしておく。
+    model       TEXT NOT NULL DEFAULT '',
+    adapter     TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS stars_rating ON stars (rating, created_at);

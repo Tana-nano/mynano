@@ -17,6 +17,10 @@ class PathsConfig:
 class LLMConfig:
     base_url: str = "http://localhost:8080/v1"
     model: str = "local"
+    # いま llama-server に読ませている LoRA アダプタの名札。
+    # nano 側からは検出できない（OpenAI互換APIには出てこない）ので、人間が書く。
+    # 人格の計測記録に刻まれる値なので、当て替えたら必ず変えること。docs/finetune.md
+    adapter: str = ""
     api_key: str = ""
     timeout_s: float = 300.0
     temperature: float = 0.8

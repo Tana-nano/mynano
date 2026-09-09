@@ -281,17 +281,37 @@ def _dispatch(app: App, args) -> int:
 
     if args.command == "probe":
         report = drift_module.run(
-            app.config, app.db, app.llm, app.embedder, save_baseline=args.save_baseline
+            app.config,
+            app.db,
+            app.llm,
+            app.embedder,
+            save_baseline=args.save_baseline,
+            llm_identity=app.llm_identity,
         )
         if not report.results:
             print("プローブが定義されていません。", app.config.probes_path)
             return 1
+        conditions = report.conditions
+        print(
+            f"測定条件: 埋め込み {conditions.embedding} / 対話 {conditions.llm}"
+            + (f" + {conditions.adapter}" if conditions.adapter else "")
+        )
+        if report.incomparable:
+            # 数字を出さない。別の空間のベクトルを比べた値を「人格のずれ」として
+            # 見せると、それを根拠に学習の可否を決めてしまう。
+            print(f"\n前回の基準とは比較できません:\n  {report.incomparable}", file=sys.stderr)
+            if not report.baseline_created:
+                return 2
         if report.baseline_created:
             print(f"基準を保存しました: {drift_module.baseline_path(app.config)}")
         mean = report.mean_similarity
         if mean is None:
             print(f"{len(report.results)} 問に回答。次回からずれを測れます。")
             return 0
+        if report.changes:
+            print("前回の基準からの変更: " + " / ".join(report.changes))
+        if report.missing_probes:
+            print(f"（基準に無い質問が {report.missing_probes} 問。増やした分は次回から測れます）")
         print(f"平均類似度: {mean:.3f}（1.0 に近いほど「同じ存在」）")
         print("ずれの大きい質問:")
         for result in report.worst():
@@ -318,12 +338,21 @@ def _dispatch(app: App, args) -> int:
     if args.command == "dataset":
         try:
             target, built = dataset_module.export(
-                app.config, app.db, embedding_identity=app.embedder.identity, force=args.force
+                app.config,
+                app.db,
+                embedding_identity=app.embedder.identity,
+                llm_identity=app.llm_identity,
+                force=args.force,
             )
         except dataset_module.BaselineMissing as missing:
             print(missing, file=sys.stderr)
             return 2
         print(f"{built} → {target}")
+        generations = built.generations()
+        if len(generations) > 1:
+            print("⭐ が付いた応答の版が分かれています（混ぜると訛りが自己増幅します）:")
+            for name, count in sorted(generations.items(), key=lambda kv: -kv[1]):
+                print(f"    {name}: {count} 件")
         if not built.keep:
             print("⭐ がまだありません。まずは会話しながら /star を押してください。")
             return 0
@@ -336,6 +365,7 @@ def _dispatch(app: App, args) -> int:
         print("  1. nano probe          （学習前のずれを記録）")
         print("  2. QLoRA（8B / 低rank / ORPO寄り。大量の SFT は人格を薄める）")
         print("  3. nano probe          （別人になっていないかを同じ物差しで測る）")
+        print("     手順の詳細と、当てる前に決めておくこと: docs/finetune.md")
         return 0
 
     if args.command == "state":

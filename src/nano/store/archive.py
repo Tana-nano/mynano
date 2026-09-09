@@ -46,6 +46,8 @@ def mirror_star(
     rating: int = 0,
     reason: str = "",
     prompt: list[dict[str, str]] | None = None,
+    model: str = "",
+    adapter: str = "",
     ts: float | None = None,
 ) -> None:
     """⭐ の操作を追記する。付けたときも外したときも1行増える（消えない）。
@@ -67,6 +69,9 @@ def mirror_star(
         "user": user_text,
         "answer": answer,
         "prompt": prompt or [],
+        # 誰が出した応答への印か。DB が失われてもここから世代を分けられる。
+        "model": model,
+        "adapter": adapter,
     }
     with (archive_dir / "stars.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")

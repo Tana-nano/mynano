@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 from nano.app import App
+from nano.store.db import Database
 from nano.store import archive, notes as notes_store, state as state_store
 
 from conftest import converse
@@ -74,3 +77,27 @@ def test_backup_snapshot_is_a_usable_database(app, tmp_path):
         assert conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0] > 0
     finally:
         conn.close()
+
+
+def test_columns_added_later_reach_an_existing_soul(tmp_path):
+    """あとから足した列が、既に存在する soul.db にも行き渡ること。
+
+    `CREATE TABLE IF NOT EXISTS` は既存のテーブルには何もしない。
+    一生モノの DB を前提にする以上、列を足すたびに魂を作り直させるわけにいかない。
+    """
+    path = tmp_path / "soul.db"
+    Database(path).close()
+
+    # 列がまだ無かった頃の soul.db を再現する
+    legacy = sqlite3.connect(path)
+    for _, column, _ddl in Database.ADDED_COLUMNS:
+        legacy.execute(f"ALTER TABLE stars DROP COLUMN {column}")
+    legacy.commit()
+    legacy.close()
+
+    db = Database(path)  # 開き直すだけで移行される
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(stars)")}
+    assert {"model", "adapter"} <= columns
+    db.close()
+
+    Database(path).close()  # 2度目は何も起きない（冪等）

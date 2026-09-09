@@ -22,7 +22,7 @@ from . import calibration as calibration_module
 from .config import Config
 from .embed import HashEmbedder, build_embedder
 from .llm import LLMError, LlamaServerLLM
-from .persona.drift import baseline_path
+from .persona.drift import baseline_path, load_baseline, usable_baseline
 from .store import identity as identity_store
 from .store import jobs as jobs_store
 from .store import stars as stars_store
@@ -84,7 +84,7 @@ def run(config: Config) -> Report:
         findings.append(embed_finding)
         findings.append(_identity(db, live_identity))
         findings.append(_calibration(config, live_identity))
-        findings.append(_baseline(config))
+        findings.append(_baseline(config, live_identity))
         findings.append(_link_density(db))
         findings.append(_jobs(db))
         findings += _environment()
@@ -223,15 +223,34 @@ def _calibration(config: Config, live_identity: str) -> Finding:
     )
 
 
-def _baseline(config: Config) -> Finding:
-    if baseline_path(config).exists():
-        return Finding(OK, "人格ベースライン", str(baseline_path(config)))
-    return Finding(
-        WARN,
-        "人格ベースライン",
-        "未取得。ドリフトを測る基準がありません",
-        "nano probe --save-baseline（これが無いと nano dataset が止まります）",
-    )
+def _baseline(config: Config, live_identity: str) -> Finding:
+    """基準が「在るか」ではなく「いまの構成で使えるか」を診る。
+
+    `--offline` で一度でも probe を回すとハッシュ埋め込みの基準ができる。
+    在ることだけを見ていると、それを持ったまま実機に載せて、
+    別空間のベクトルどうしを比べた数字を人格のずれとして読むことになる。
+    """
+    baseline = load_baseline(config)
+    if baseline is None:
+        return Finding(
+            WARN,
+            "人格ベースライン",
+            "未取得。ドリフトを測る基準がありません",
+            "nano probe --save-baseline（これが無いと nano dataset が止まります）",
+        )
+    unusable = usable_baseline(config, live_identity) if live_identity else ""
+    if unusable:
+        return Finding(
+            FAIL,
+            "人格ベースライン",
+            unusable.splitlines()[0],
+            "nano probe --save-baseline（いまのモデルで取り直す）",
+        )
+    measured = baseline.conditions
+    detail = f"{baseline.created[:10] or '取得日不明'} / 対話 {measured.llm or '不明'}"
+    if measured.adapter:
+        detail += f" + {measured.adapter}"
+    return Finding(OK, "人格ベースライン", detail)
 
 
 def _link_density(db: Database) -> Finding:

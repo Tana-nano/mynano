@@ -130,6 +130,15 @@ class App:
             calibration=calibration_module.load(config, embedder.identity),
         )
 
+    @property
+    def llm_identity(self) -> str:
+        """人格の計測記録に刻む対話モデルの名札。
+
+        `--offline` のスタブは "offline-stub" を名乗るので、スタブで取った基準が
+        実機の数字と同じものとして扱われることがない。
+        """
+        return getattr(self.llm, "model", "") or "unknown"
+
     def close(self) -> None:
         for component in (self.llm, self.embedder, self.gate):
             closer = getattr(component, "close", None)
@@ -208,6 +217,8 @@ class App:
                 rating=stars_store.RATING_AVOID,
                 prompt=previous.messages,
                 reason="出し直しを求められた",
+                model=self.llm_identity,
+                adapter=self.config.llm.adapter,
             )
             archive.mirror_star(
                 self.config.archive_dir,
@@ -219,6 +230,8 @@ class App:
                 rating=stars_store.RATING_AVOID,
                 reason="出し直しを求められた",
                 prompt=previous.messages,
+                model=self.llm_identity,
+                adapter=self.config.llm.adapter,
             )
 
         with self.gate.acquire(PRIORITY_CHAT) as cancel:
@@ -269,6 +282,8 @@ class App:
             rating=rating,
             prompt=exchange.messages,
             reason=reason,
+            model=self.llm_identity,
+            adapter=self.config.llm.adapter,
         )
         archive.mirror_star(
             self.config.archive_dir,
@@ -280,6 +295,8 @@ class App:
             rating=star.rating,
             reason=reason,
             prompt=exchange.messages,
+            model=star.model,
+            adapter=star.adapter,
             ts=star.updated_at,
         )
         return exchange

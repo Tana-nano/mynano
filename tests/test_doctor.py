@@ -11,6 +11,7 @@ import pytest
 
 from fake_server import FakeServer
 from nano import doctor
+from conftest import write_baseline
 from nano.persona.drift import baseline_path
 from nano.store import identity as identity_store
 from nano.store.db import Database
@@ -38,7 +39,7 @@ def _by_title(report) -> dict[str, doctor.Finding]:
 
 
 def test_a_healthy_setup_passes(wired):
-    baseline_path(wired).write_text("{}", encoding="utf-8")
+    write_baseline(wired, f"{wired.embed.model}@{wired.embed.dim}")
     report = doctor.run(wired)
     found = _by_title(report)
     assert found["対話モデル"].status == doctor.OK

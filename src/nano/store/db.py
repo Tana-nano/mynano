@@ -39,13 +39,31 @@ class Database:
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.migrate()
 
+    # あとから足した列。`CREATE TABLE IF NOT EXISTS` は既存のテーブルには効かないので、
+    # 既に魂を持っている人の soul.db にはここを通して足す。
+    # 消す/型を変える方向のマイグレーションは書かない（禁則1と同じ理由で、
+    # 一生モノの DB に対して不可逆な操作を自動で走らせない）。
+    ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+        # ⭐ を出したのがどのモデル／アダプタか。M4 で世代をまたいで ⭐ が貯まるため。
+        ("stars", "model", "TEXT NOT NULL DEFAULT ''"),
+        ("stars", "adapter", "TEXT NOT NULL DEFAULT ''"),
+    )
+
     def migrate(self) -> None:
         self.conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        for table, column, ddl in self.ADDED_COLUMNS:
+            self._add_column(table, column, ddl)
         self.conn.execute(
             "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (SCHEMA_VERSION,),
         )
+
+    def _add_column(self, table: str, column: str, ddl: str) -> None:
+        existing = {row["name"] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+        if not existing or column in existing:
+            return
+        self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     # --- 薄いヘルパー。ORM は入れない（寿命の問題） ---
     def execute(self, sql: str, params: Sequence[Any] = ()) -> sqlite3.Cursor:

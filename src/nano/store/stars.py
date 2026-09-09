@@ -30,9 +30,12 @@ class Star:
     created_at: float
     updated_at: float
     created_by: str
+    model: str = ""    # この応答を出した対話モデル
+    adapter: str = ""  # そのとき当てていた LoRA アダプタ（無ければ空）
 
     @classmethod
     def from_row(cls, row) -> "Star":
+        keys = row.keys()
         return cls(
             event_id=row["event_id"],
             rating=row["rating"],
@@ -41,6 +44,8 @@ class Star:
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             created_by=row["created_by"],
+            model=row["model"] if "model" in keys else "",
+            adapter=row["adapter"] if "adapter" in keys else "",
         )
 
 
@@ -80,17 +85,25 @@ def put(
     prompt: Sequence[dict[str, str]],
     reason: str = "",
     created_by: str = "human",
+    model: str = "",
+    adapter: str = "",
 ) -> Star:
-    """印を付ける（付け直しも同じ経路）。"""
+    """印を付ける（付け直しも同じ経路）。
+
+    model / adapter は「この応答を出したのは誰か」。⭐ は応答への印なので、
+    LoRA を当てた前後で同じ意味を持たない。混ぜたまま次の教師データにすると、
+    当てたはずの訛りを自分自身から学び直すことになる（docs/finetune.md）。
+    """
     timestamp = now()
     prompt_json = json.dumps(list(prompt), ensure_ascii=False)
     db.execute(
-        "INSERT INTO stars(event_id, rating, reason, prompt_json, created_at, updated_at, created_by) "
-        "VALUES(?,?,?,?,?,?,?) "
+        "INSERT INTO stars(event_id, rating, reason, prompt_json, created_at, updated_at, "
+        "                  created_by, model, adapter) "
+        "VALUES(?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(event_id) DO UPDATE SET "
         "  rating=excluded.rating, reason=excluded.reason, "
         "  prompt_json=excluded.prompt_json, updated_at=excluded.updated_at",
-        (event_id, rating, reason, prompt_json, timestamp, timestamp, created_by),
+        (event_id, rating, reason, prompt_json, timestamp, timestamp, created_by, model, adapter),
     )
     row = db.one("SELECT * FROM stars WHERE event_id=?", (event_id,))
     return Star.from_row(row)

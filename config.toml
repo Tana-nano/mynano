@@ -9,6 +9,10 @@ soul_dir = "soul"
 # llama-server (OpenAI互換) を想定。Ollama なら http://localhost:11434/v1
 base_url = "http://localhost:8080/v1"
 model = "local"
+# いま llama-server に読ませている LoRA アダプタの名札。空 = 素のモデル。
+# nano 側からは検出できない（OpenAI互換APIには出てこない）ので、人間が書く。
+# 人格の計測記録と ⭐ の1件ごとに刻まれる。当て替えたら必ず変えること。docs/finetune.md
+adapter = ""
 api_key = ""
 timeout_s = 300.0
 temperature = 0.8

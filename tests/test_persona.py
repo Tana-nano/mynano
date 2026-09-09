@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nano.embed import HashEmbedder
 from nano.memory.retrieve import recall
 from nano.persona import drift as drift_module
 from nano.persona.compose import build_messages, build_system_prompt
@@ -92,3 +93,63 @@ def test_second_probe_run_measures_drift(app):
 
     assert again.mean_similarity is not None
     assert again.mean_similarity > 0.99, "同じ設定なら人格は動かないはず"
+
+
+# --- 測定条件（M4-3 の前提） ------------------------------------------------
+#
+# 応答を埋め込んで比べる以上、埋め込みモデルが違えば数字は無意味になる。
+# それでも次元さえ合っていればコサインは「それらしい数字」を返すので、
+# 黙って壊れる。記憶ストア側（store/identity.py）と同じ防御を人格側にも置いた。
+
+
+def test_baseline_records_how_it_was_measured(app):
+    """基準に測定条件が刻まれること。無いと、何と比べた数字なのか決められない。"""
+    app.config.persona.probes_path = str(PROBES)
+    drift_module.run(app.config, app.db, app.llm, app.embedder, llm_identity=app.llm_identity)
+
+    baseline = drift_module.load_baseline(app.config)
+    assert baseline is not None
+    assert baseline.version == drift_module.BASELINE_VERSION
+    assert baseline.conditions.embedding == app.embedder.identity
+    assert baseline.conditions.llm == "offline-stub", "スタブで取った基準はそう名乗ること"
+    assert baseline.conditions.constitution and baseline.conditions.probes
+
+
+def test_a_baseline_from_another_embedding_space_is_refused(app):
+    """--offline で取った基準を実機でそのまま使わせない。
+
+    これを通していた頃は、ハッシュ埋め込みのベクトルと e5 のベクトルを cos にかけた
+    数字が「人格のずれ」として表示されていた。どちらも既定 1024 次元なので、
+    次元チェックにも引っかからない。
+    """
+    app.config.persona.probes_path = str(PROBES)
+    drift_module.run(app.config, app.db, app.llm, app.embedder, llm_identity=app.llm_identity)
+
+    app.embedder = HashEmbedder(dim=512)  # 別空間のふり（実機なら e5 に相当）
+    report = drift_module.run(app.config, app.db, app.llm, app.embedder)
+
+    assert report.incomparable, "空間が違うのに比較してはいけない"
+    assert report.mean_similarity is None, "無意味な数字を出さない"
+    assert not report.baseline_created, "黙って基準を上書きもしない"
+
+
+def test_a_legacy_baseline_without_conditions_is_refused(app):
+    """測定条件を記録していなかった頃の基準は、条件不明として断る。"""
+    drift_module.baseline_path(app.config).parent.mkdir(parents=True, exist_ok=True)
+    drift_module.baseline_path(app.config).write_text("{}", encoding="utf-8")
+
+    reason = drift_module.usable_baseline(app.config, app.embedder.identity)
+    assert "測定条件が記録されていません" in reason
+
+
+def test_changing_the_model_is_reported_but_still_compared(app):
+    """LoRA を当てたら比較は続ける。それを測るのが probe の用途なので止めない。"""
+    app.config.persona.probes_path = str(PROBES)
+    drift_module.run(app.config, app.db, app.llm, app.embedder, llm_identity=app.llm_identity)
+
+    app.config.llm.adapter = "nano-v1"
+    after = drift_module.run(app.config, app.db, app.llm, app.embedder, llm_identity=app.llm_identity)
+
+    assert not after.incomparable
+    assert after.mean_similarity is not None
+    assert any("LoRA アダプタ" in change for change in after.changes)

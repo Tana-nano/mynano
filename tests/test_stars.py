@@ -14,8 +14,10 @@ import json
 
 import pytest
 
+from conftest import write_baseline
+
 from nano.persona import dataset as dataset_module
-from nano.persona.drift import baseline_path
+from nano.store import events as events_store
 from nano.store import stars as stars_store
 
 
@@ -136,10 +138,10 @@ def test_export_requires_a_persona_baseline(app):
     app.star()
 
     with pytest.raises(dataset_module.BaselineMissing):
-        dataset_module.export(app.config, app.db)
+        dataset_module.export(app.config, app.db, embedding_identity=app.embedder.identity)
 
-    baseline_path(app.config).write_text("{}", encoding="utf-8")
-    target, built = dataset_module.export(app.config, app.db)
+    write_baseline(app.config, app.embedder.identity)
+    target, built = dataset_module.export(app.config, app.db, embedding_identity=app.embedder.identity)
 
     assert len(built.keep) == 1
     written = (target / "sft.jsonl").read_text(encoding="utf-8").strip().splitlines()
@@ -288,12 +290,73 @@ def test_orpo_pairs_are_exported(varying_replies):
     app.say("出し直してみる", "s1")
     app.again()
     app.star()
-    baseline_path(app.config).write_text("{}", encoding="utf-8")
+    write_baseline(app.config, app.embedder.identity)
 
-    target, built = dataset_module.export(app.config, app.db)
+    target, built = dataset_module.export(app.config, app.db, embedding_identity=app.embedder.identity)
     lines = (target / "orpo.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     record = _json.loads(lines[0])
-    assert set(record) == {"prompt", "chosen", "rejected"}
+    assert set(record) == {"prompt", "chosen", "rejected", "meta"}
     assert record["chosen"] != record["rejected"]
     assert record["prompt"][-1]["role"] == "user"
+
+
+# --- 世代（どのモデルが出した応答への ⭐ か） --------------------------------
+#
+# LoRA を当てたあとも ⭐ は貯まり続ける。当てる前の ⭐ と混ぜて次の学習に使うと、
+# 前回焼いた訛りを自分自身から学び直すことになる。分けられるように出どころを刻む。
+
+
+def test_a_star_records_which_model_answered(app):
+    app.say("何か", "s1")
+    app.star()
+
+    star = stars_store.get(app.db, app.exchanges[-1].companion_event_id)
+    assert star is not None
+    assert star.model == "offline-stub"
+    assert star.adapter == ""
+
+
+def test_the_adapter_is_recorded_when_one_is_loaded(app):
+    app.config.llm.adapter = "nano-v1"
+    app.say("当てたあとの会話", "s1")
+    app.star()
+
+    star = stars_store.get(app.db, app.exchanges[-1].companion_event_id)
+    assert star.adapter == "nano-v1"
+
+    built = dataset_module.build(app.db)
+    assert built.keep[0].generation == "offline-stub+nano-v1"
+
+
+def test_pairs_are_not_made_across_generations(app):
+    """版をまたいだ ⭐/✗ を対にしない。
+
+    プロンプトを組み直さない理由と同じ。対の2つは「同じ入力に対する別々の出力」で
+    なければならず、片方が別のモデルの出力なら、差はサンプリングの揺れではなく
+    モデルの差になる。それを学習すると「前の自分より今の自分を好め」を教えることになる。
+    """
+    app.say("同じ問い", "s1")
+    old = app.exchanges[-1]
+    stars_store.put(
+        app.db,
+        old.companion_event_id,
+        rating=stars_store.RATING_AVOID,
+        prompt=old.messages,
+        model="offline-stub",
+        adapter="",
+    )
+    # 同じプロンプトに、LoRA を当てたあとの応答として ⭐ が付いた形を作る
+    new_event = events_store.append(app.db, old.session_id, "companion", "当てたあとの応答")
+    stars_store.put(
+        app.db,
+        new_event.id,
+        rating=stars_store.RATING_KEEP,
+        prompt=old.messages,
+        model="offline-stub",
+        adapter="nano-v1",
+    )
+
+    built = dataset_module.build(app.db)
+    assert built.pairs == [], "版をまたいだ対は作らない"
+    assert built.cross_generation == 1, "捨てたことは数えて見せる"
