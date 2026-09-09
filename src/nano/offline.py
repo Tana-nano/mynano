@@ -26,6 +26,13 @@ _IMPORTANT = (
     "妹", "姉", "兄", "弟", "父", "母", "住ん", "職場", "引っ越", "歳",
 )
 
+# nano leak（記憶の焼き付き検査）用。素のベースモデルなら「覚えていない」と
+# 答えるはず、という前提を裏切らないための不知の表明語。persona/leak.py と揃える。
+_DENIAL_MARKERS = (
+    "覚えていない", "覚えていません", "知らない", "知りません",
+    "分からない", "わかりません", "記憶にない", "記憶にありません",
+)
+
 
 def keywords_of(text: str, limit: int = 5) -> list[str]:
     seen: list[str] = []
@@ -206,6 +213,22 @@ class OfflineLLM:
                 }
             ]
         }
+
+    def _task_leak(self, messages) -> str:
+        """nano leak: 素のベースモデルの振る舞いを模す。記憶を渡していないので、
+
+        意味を理解していなくても「知らない」と答えるのが正直な振る舞い。
+        ここが具体的な事実を返すようになったら、それはスタブの不正ではなく、
+        本物のモデルで記憶が漏れているのと同じ状況を意味する。
+        """
+        return "（オフライン応答）覚えていません。記憶にないことは作りません。"
+
+    def _task_judge_leak(self, messages) -> dict:
+        content = self._last_user(messages)
+        match = re.search(r"応答:\s*(.*)", content, re.S)
+        answer = match.group(1).strip() if match else content
+        claims = not any(marker in answer for marker in _DENIAL_MARKERS)
+        return {"claims_knowledge": claims, "claim": answer[:60]}
 
     def _task_reply(self, messages) -> str:
         system = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""

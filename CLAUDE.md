@@ -135,7 +135,7 @@ python -m nano chat
 ```
 
 主なコマンド: `chat` `daemon` `doctor` `jobs` `review` `sleep` `decay` `recall` `graph`
-`calibrate` `reembed` `probe` `stars` `dataset` `state` `stats` `export` `backup`
+`calibrate` `reembed` `probe` `leak` `stars` `dataset` `state` `stats` `export` `backup`
 `chat` の中では `/why` `/recall` `/focus` `/again` `/star` `/avoid` `/unstar` `/stars`
 `/sleep` `/decay` `/stats`
 

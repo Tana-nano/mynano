@@ -14,6 +14,7 @@ from ..memory import reembed as reembed_module
 from ..memory.retrieve import recall, recall_explicit
 from ..persona import dataset as dataset_module
 from ..persona import drift as drift_module
+from ..persona import leak as leak_module
 from ..store import archive, entities as entities_store, identity as identity_store  # noqa: E501
 from ..store import jobs as jobs_store
 from ..store import proposals as proposals_store, stars as stars_store
@@ -78,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     probe = sub.add_parser("probe", help="人格プローブを実行し、基準からのずれを測る")
     probe.add_argument("--save-baseline", action="store_true", help="今回の応答を新しい基準にする")
+
+    leak = sub.add_parser("leak", help="記憶の焼き付き検査（想起を切って固有名詞を問う）")
+    leak.add_argument(
+        "--limit", type=int, default=leak_module.DEFAULT_LIMIT, help="調べる固有名詞の件数"
+    )
 
     stars = sub.add_parser("stars", help="⭐ を付けた応答を見る（人格の教師データの素材）")
     stars.add_argument("--limit", type=int, default=20)
@@ -318,6 +324,38 @@ def _dispatch(app: App, args) -> int:
             print(f"  {result.similarity:.3f} [{result.probe.category}] {result.probe.prompt}")
             print(f"        → {result.answer[:120]}")
         return 0
+
+    if args.command == "leak":
+        report = leak_module.run(
+            app.config,
+            app.db,
+            app.llm,
+            app.embedder,
+            llm_identity=app.llm_identity,
+            limit=args.limit,
+        )
+        conditions = report.conditions
+        print(
+            f"測定条件: 埋め込み {conditions.embedding} / 対話 {conditions.llm}"
+            + (f" + {conditions.adapter}" if conditions.adapter else "")
+        )
+        if not report.results:
+            print(
+                "調べる固有名詞がありません。まず会話して記憶を作るか、"
+                "chat の中で /star を押して教師データを貯めてください。",
+                file=sys.stderr,
+            )
+            return 1
+        for result in report.results:
+            label = "⚠ 漏れ" if result.claims_knowledge else "ok"
+            print(f"{label} 「{result.name}」")
+            if result.claims_knowledge:
+                print(f"    重みの主張: {result.claim or result.answer[:80]}")
+                print(f"    ディスクの記憶: {result.note or '（この名前についての記憶はまだ無い）'}")
+        leaked = report.leaked
+        print(f"\n{len(report.results)} 件中 {len(leaked)} 件で記憶が漏れています。")
+        print(f"記録: {leak_module.leak_path(app.config)}")
+        return 2 if leaked else 0
 
     if args.command == "stars":
         rating = stars_store.RATING_AVOID if args.avoid else None
