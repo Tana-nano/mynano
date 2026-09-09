@@ -168,6 +168,20 @@ def test_exported_page_loads_nothing_from_the_network(app):
     assert "cdn." not in html
 
 
+def test_layout_uses_a_quadtree_not_all_pairs(app):
+    """数千件で O(n²) が効いてくる（CLAUDE.md §8 積み残し）ので Barnes-Hut に置き換えた。
+
+    ブラウザの実描画は Playwright でしか確かめられないが、力学レイアウトの
+    総当たりループが復活していないことは Python 側からでも見張れる。
+    """
+    html = graph_page.render("test", payload=graph_data.build(app.db, app.config.decay).to_dict())
+
+    assert "buildQuadtree" in html
+    assert "applyRepulsion" in html
+    # 元の全対全の二重ループ（i, j = i + 1 で回すやつ）が戻っていないこと
+    assert not re.search(r"for\s*\(\s*let\s+j\s*=\s*i\s*\+\s*1", html)
+
+
 def test_exported_page_embeds_the_data(app):
     converse(app, CONVERSATION)
     app.ingest()
