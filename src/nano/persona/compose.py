@@ -38,6 +38,18 @@ def load_constitution(config: Config) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def build_bare_system_prompt(config: Config) -> str:
+    """記憶の焼き付き検査（`nano leak`）専用の、最小構成のシステムプロンプト。
+
+    憲章と「記憶の扱い」のルールだけを積み、自己像・相手像・いまの状態・想起した記憶は
+    一切含めない。理由は単純で、そのどれかに固有名詞が混ざっていれば、モデルは
+    それを「見た上で答えている」ことになり、検査が「重みに焼けているか」ではなく
+    「プロンプトに漏れていないか」を測るものにすり替わってしまう。
+    LoRA が記憶を持っているかどうかを見るには、渡す材料をこれ以上削れない形にする必要がある。
+    """
+    return "\n\n".join([load_constitution(config), _MEMORY_RULES])
+
+
 def build_system_prompt(config: Config, db: Database, recall: Recall | None = None) -> str:
     sections: list[str] = [load_constitution(config)]
 
