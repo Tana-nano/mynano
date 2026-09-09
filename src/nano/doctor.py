@@ -173,6 +173,8 @@ def _adapter(config: Config) -> Finding | None:
             response = client.get(f"{root}/lora-adapters")
             response.raise_for_status()
             payload = response.json()
+            if not isinstance(payload, list):
+                raise ValueError("lora-adapters が配列ではない")  # 別実装が同じパスを持っている場合
     except (httpx.HTTPError, ValueError):
         if label:
             return Finding(
