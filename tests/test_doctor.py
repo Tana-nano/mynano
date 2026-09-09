@@ -97,6 +97,60 @@ def test_it_does_not_repair_anything(wired):
     assert not baseline_path(wired).exists()
 
 
+def test_adapter_bare_model_matches_empty_label(wired, server):
+    server.script.lora_adapters = []
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.OK
+    assert "素のモデル" in found["LoRA アダプタ"].detail
+
+
+def test_adapter_server_has_one_but_label_is_empty(wired, server):
+    server.script.lora_adapters = [{"id": 0, "path": "/models/nano-v1.gguf", "scale": 0.7}]
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.FAIL
+    assert "nano-v1.gguf" in found["LoRA アダプタ"].detail
+    assert "adapter" in found["LoRA アダプタ"].remedy
+
+
+def test_adapter_label_set_but_server_has_none(wired, server):
+    wired.llm.adapter = "nano-v1@0.7"
+    server.script.lora_adapters = []
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.FAIL
+    assert "nano-v1@0.7" in found["LoRA アダプタ"].detail
+    assert "lora-scaled" in found["LoRA アダプタ"].remedy
+
+
+def test_adapter_label_matches_server(wired, server):
+    wired.llm.adapter = "nano-v1@0.7"
+    server.script.lora_adapters = [{"id": 0, "path": "/models/nano-v1.gguf", "scale": 0.7}]
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.OK
+    assert "nano-v1@0.7" in found["LoRA アダプタ"].detail
+    assert "nano-v1.gguf" in found["LoRA アダプタ"].detail
+
+
+def test_adapter_inactive_scale_counts_as_not_loaded(wired, server):
+    """scale 0.0 は「積んであるが無効」。素のモデル扱いと同じ結論になる。"""
+    wired.llm.adapter = "nano-v1@0.0"
+    server.script.lora_adapters = [{"id": 0, "path": "/models/nano-v1.gguf", "scale": 0.0}]
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.FAIL  # 名札は載せたつもりでも実際は効いていない
+
+
+def test_adapter_endpoint_missing_without_label_does_not_fail(wired):
+    """FakeServer 既定は /lora-adapters 未実装（404）。旧いサーバーや別実装で拒否にしない。"""
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.OK
+
+
+def test_adapter_endpoint_missing_with_label_warns(wired):
+    wired.llm.adapter = "nano-v1@0.7"
+    found = _by_title(doctor.run(wired))
+    assert found["LoRA アダプタ"].status == doctor.WARN
+    assert "nano-v1@0.7" in found["LoRA アダプタ"].detail
+
+
 def test_dense_links_are_flagged(wired):
     from nano.store import graph as graph_store
     from nano.store import notes as notes_store
