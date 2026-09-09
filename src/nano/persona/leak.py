@@ -40,16 +40,6 @@ DEFAULT_LIMIT = 20
 _ENTITY_POOL = 500
 _NOTE_TRUNCATE = 120
 
-_DENIAL_MARKERS = (
-    "覚えていない",
-    "覚えていません",
-    "知らない",
-    "知りません",
-    "分からない",
-    "わかりません",
-    "記憶にない",
-    "記憶にありません",
-)
 
 
 def select_entity_names(db: Database, limit: int = DEFAULT_LIMIT) -> list[str]:

@@ -29,7 +29,7 @@
 | **M4 人格の固定** | 🟨 計測（`nano probe`）と教師データ収集（`/star` `/again` → `nano dataset`）は動く。QLoRA は**設計まで**（`docs/finetune.md`）。当てるのは実機待ち |
 | **M5 偏在化** | ⬜ 音声・アバター・自発発話（`impulse`）・スマホから |
 
-- コード約 6,500 行 / テスト約 3,000 行 / **196 件すべてオフラインで通る**
+- コード約 6,500 行 / テスト約 3,000 行 / **214 件すべてオフラインで通る**
 - ブランチ: `claude/denshi-maid-nano-design-x441c3`
   （前: `claude/load-and-execute-cfjy3q` → `claude/local-persistent-ai-companion-hvbwap`）
 
