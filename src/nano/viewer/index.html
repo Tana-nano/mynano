@@ -279,26 +279,126 @@ const visibleEdges = () =>
   edges.filter((e) => matches(e.s) && matches(e.t) && (filters.weak || e.weight >= 0.5));
 
 /* ---------- 力学 ---------- */
+// 斥力は Barnes-Hut 四分木で近似する（θ=0.8）。全対全だと O(n²) で、
+// 数千件になると1ティックが人の待てる時間を超える（CLAUDE.md §8 積み残し）。
+//
+// 各ノードに「電荷」 q = 1300 + 90r を割り当てると、元の全対全の式
+//   push(a,b) = (2600 + (a.r + b.r)*90) / d²  = (q(a) + q(b)) / d²
+// と厳密に一致する。この形は集団についても和で近似できて、
+// 遠く（セルの一辺 / 距離 < θ）にある集団は「点の個数 × q(a) + 集団の電荷合計」
+// をその重心1点からの力として扱ってよい。近く（θ を満たさない）は木の葉まで
+// 降りて元の式のまま計算するので、小さいグラフでは見た目はほぼ変わらない。
+const BH_THETA = 0.8;
+
+function buildQuadtree(points) {
+  if (!points.length) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  let half = Math.max(maxX - minX, maxY - minY) / 2;
+  if (!(half > 1e-6)) half = 1;              // 全ノードが同じ点でも幅を持たせる
+  half *= 1.001;                              // 境界ぴったりの点も内側に収める
+  const root = { x0: cx - half, y0: cy - half, x1: cx + half, y1: cy + half, pts: [], children: null };
+  for (const p of points) quadInsert(root, p, 0);
+  quadAggregate(root);
+  return root;
+}
+
+function quadInsert(node, p, depth) {
+  if (!node.children) {
+    if (node.pts.length === 0) { node.pts.push(p); return; }
+    // 深さの上限か、これ以上割っても意味の無い大きさまで来たらバケツのまま持つ
+    // （座標がほぼ重なるノード同士で無限に分割し続けるのを防ぐ）
+    if (depth > 24 || node.x1 - node.x0 < 1e-3) { node.pts.push(p); return; }
+    const old = node.pts;
+    node.pts = [];
+    subdivideQuad(node);
+    for (const o of old) quadInsertChild(node, o, depth + 1);
+    quadInsertChild(node, p, depth + 1);
+    return;
+  }
+  quadInsertChild(node, p, depth + 1);
+}
+
+function subdivideQuad(node) {
+  const mx = (node.x0 + node.x1) / 2, my = (node.y0 + node.y1) / 2;
+  node.children = [
+    { x0: node.x0, y0: node.y0, x1: mx, y1: my, pts: [], children: null }, // 左上
+    { x0: mx, y0: node.y0, x1: node.x1, y1: my, pts: [], children: null }, // 右上
+    { x0: node.x0, y0: my, x1: mx, y1: node.y1, pts: [], children: null }, // 左下
+    { x0: mx, y0: my, x1: node.x1, y1: node.y1, pts: [], children: null }, // 右下
+  ];
+}
+
+function quadInsertChild(node, p, depth) {
+  const mx = (node.x0 + node.x1) / 2, my = (node.y0 + node.y1) / 2;
+  const idx = (p.x < mx ? 0 : 1) + (p.y < my ? 0 : 2);
+  quadInsert(node.children[idx], p, depth);
+}
+
+// 葉から根に向かって、電荷の合計（重さ）と重心を積み上げる
+function quadAggregate(node) {
+  if (node.children) {
+    let count = 0, charge = 0, sx = 0, sy = 0;
+    for (const c of node.children) {
+      quadAggregate(c);
+      count += c.count; charge += c.charge;
+      sx += c.cx * c.charge; sy += c.cy * c.charge;
+    }
+    node.count = count; node.charge = charge;
+    node.cx = charge > 0 ? sx / charge : (node.x0 + node.x1) / 2;
+    node.cy = charge > 0 ? sy / charge : (node.y0 + node.y1) / 2;
+  } else {
+    let charge = 0, sx = 0, sy = 0;
+    for (const p of node.pts) { charge += p.q; sx += p.x * p.q; sy += p.y * p.q; }
+    node.count = node.pts.length; node.charge = charge;
+    node.cx = charge > 0 ? sx / charge : (node.x0 + node.x1) / 2;
+    node.cy = charge > 0 ? sy / charge : (node.y0 + node.y1) / 2;
+  }
+}
+
+// ノード a に働く斥力を木から集める。葉（＝十分近い相手）は元の式のまま個別に、
+// 遠い集団は重心1点として扱う。
+function applyRepulsion(node, a, theta2) {
+  if (!node || node.count === 0) return;
+  if (!node.children) {
+    for (const p of node.pts) { if (p !== a) pairwisePush(a, p); }
+    return;
+  }
+  const dx = node.cx - a.x, dy = node.cy - a.y;
+  const d2 = dx * dx + dy * dy;
+  const size = node.x1 - node.x0;
+  if (d2 > 1e-9 && size * size < theta2 * d2) {
+    const d = Math.sqrt(d2);
+    const push = (a.q * node.count + node.charge) / d2;
+    a.vx -= (dx / d) * push; a.vy -= (dy / d) * push;
+    return;
+  }
+  for (const c of node.children) applyRepulsion(c, a, theta2);
+}
+
+function pairwisePush(a, b) {
+  let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+  if (d2 < 1e-4) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1e-4; }
+  const d = Math.sqrt(d2);
+  const push = (a.q + b.q) / d2;          // = (2600 + (a.r+b.r)*90) / d²（元の式のまま）
+  a.vx -= (dx / d) * push; a.vy -= (dy / d) * push;
+}
+
 function step() {
   const active = visibleNodes();
   const links = visibleEdges();
   if (!active.length) return;
 
-  for (const n of active) { n.vx *= 0.86; n.vy *= 0.86; }
+  for (const n of active) { n.vx *= 0.86; n.vy *= 0.86; n.q = 1300 + 90 * n.r; }
 
-  for (let i = 0; i < active.length; i++) {
-    const a = active[i];
-    for (let j = i + 1; j < active.length; j++) {
-      const b = active[j];
-      let dx = b.x - a.x, dy = b.y - a.y;
-      let d2 = dx * dx + dy * dy;
-      if (d2 < 1e-4) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1e-4; }
-      const d = Math.sqrt(d2);
-      const push = (2600 + (a.r + b.r) * 90) / d2;
-      const fx = (dx / d) * push, fy = (dy / d) * push;
-      a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
-    }
-  }
+  const tree = buildQuadtree(active);
+  const theta2 = BH_THETA * BH_THETA;
+  for (const a of active) applyRepulsion(tree, a, theta2);
+
   // つながりの多いノートは、そのぶん一本一本の引きを弱める。
   // そうしないと、よく繋がった記憶ほど中心で団子になって読めなくなる。
   const linkCount = new Map();
