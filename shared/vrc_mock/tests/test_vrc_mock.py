@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime
 
 from pythonosc.udp_client import SimpleUDPClient
@@ -47,3 +48,12 @@ def test_log_writer_produces_vrchat_shaped_lines(tmp_path):
 def test_format_line_matches_fixture_layout():
     line = format_line(datetime(2026, 9, 29, 1, 2, 3), "[Behaviour] OnLeftRoom")
     assert line == "2026.09.29 01:02:03 Log        -  [Behaviour] OnLeftRoom"
+
+
+def test_fake_vrchat_sends_head_pose():
+    from vrc_mock.osc import HEAD_POSE
+    with FakeVRChat() as vrc, OscRecorder(listen_port=vrc.out_port) as product:
+        vrc.play_pose([(0.0, 1.6, 0.0, 0.0, 90.0, 0.0)])
+        msg = product.wait_for(HEAD_POSE)
+        assert msg is not None
+        assert msg.args == pytest.approx((0.0, 1.6, 0.0, 0.0, 90.0, 0.0))  # OSC floats are 32-bit

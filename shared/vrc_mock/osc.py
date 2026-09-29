@@ -24,6 +24,7 @@ from pythonosc.osc_server import ThreadingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
 
 AVATAR_PARAM_PREFIX = "/avatar/parameters/"
+HEAD_POSE = "/tracking/vrsystem/head/pose"
 CHATBOX_INPUT = "/chatbox/input"
 CHATBOX_TYPING = "/chatbox/typing"
 
@@ -129,6 +130,17 @@ class FakeVRChat(OscRecorder):
         """Emit an avatar parameter change like VRChat does."""
         self.parameters[name] = value
         self._client.send_message(AVATAR_PARAM_PREFIX + name, value)
+
+    def send_head_pose(self, x: float, y: float, z: float, rx: float, ry: float, rz: float) -> None:
+        """Emit ``/tracking/vrsystem/head/pose`` (position XYZ, euler XYZ) like VRChat."""
+        self._client.send_message(HEAD_POSE, [float(x), float(y), float(z), float(rx), float(ry), float(rz)])
+
+    def play_pose(self, samples: "list[tuple[float, float, float, float, float, float]]", rate_hz: float = 0) -> None:
+        """Send a pose series. ``rate_hz=0`` sends as fast as possible."""
+        for s in samples:
+            self.send_head_pose(*s)
+            if rate_hz:
+                time.sleep(1.0 / rate_hz)
 
     def send(self, address: str, *args: Any) -> None:
         """Send an arbitrary OSC message to the product."""
