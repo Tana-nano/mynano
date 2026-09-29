@@ -15,8 +15,11 @@ description: Booth 出品準備。README・利用規約・商品説明文・zip 
 4. `booth.md` に商品ページ用の文章を書く（下の構成）。
 5. `python scripts/release_check.py <name>` を通す。
 6. `python scripts/package.py <name>` で `dist/<name>-<version>.zip` を作る（Linux 上では Python ソース配布のみ）。
-7. Windows exe は GitHub Actions（`build-windows.yml`）で生成する。タグ `v<version>-<name>` を push すると
-   Artifacts に zip が上がる。オーナーはそれをダウンロードして Booth に登録する。
+7. Windows exe は GitHub Actions（`build-windows.yml`）で生成する。起動方法は 2 つ:
+   - コミットメッセージに `[build:<name>]` を含めてブランチに push（セッションはタグを push できないため、通常はこちら）
+   - オーナーがタグ `v<version>-<name>` を push（正式リリース時）
+   成功すると Artifacts に `<name>-<version>-win64.zip` が上がる。ワークフロー内で exe の `--version` 起動まで確認する。
+   オーナーはそれをダウンロードして Booth に登録する。
 8. オーナーに「出品チェックリスト」を渡す（下記）。
 
 ## booth.md の構成
