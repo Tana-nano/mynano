@@ -5,7 +5,8 @@ name = "vsui-log"
 display_name = "V睡ログ"
 version = "0.1.0"
 kind = "pc-app"
-price_jpy = 800                  # オーナー決定 2026-09-29。根拠: docs/market/system-tool-candidates-2026-09.md（¥800〜1,500 帯）
+price_jpy = 800                  # 通常版。オーナー決定 2026-09-29。根拠: docs/market/system-tool-candidates-2026-09.md
+price_support_jpy = 1500         # 支援版（機能同一）。不要なら削除
 entry = "src/vsui_log/__main__.py"
 package = "vsui_log"
 
