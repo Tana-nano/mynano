@@ -1,0 +1,3 @@
+python-osc>=1.10
+zeroconf>=0.130
+pillow>=11

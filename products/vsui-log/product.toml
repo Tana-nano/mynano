@@ -19,8 +19,9 @@ requires = ["VRChat (OSC 有効)"]
 optional = ["OyasumiVR 1.11 以上（スリープモード連携）"]
 
 [deps]
-python-osc = "MIT"
-# OSCQuery 用ライブラリは /vrc-spec で確定（候補: zeroconf(LGPL) / tinyoscquery(MIT)）。要ライセンス確認
+python-osc = "Unlicense (public domain)"
+zeroconf = "LGPL-2.1-or-later"
+pillow = "MIT-CMU"
 
 [dist]
 include = ["README.md", "EULA.md", "CHANGELOG.md", "THIRD_PARTY.md", "src/", "requirements.txt"]
