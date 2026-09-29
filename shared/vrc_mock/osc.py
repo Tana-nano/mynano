@@ -124,6 +124,11 @@ class FakeVRChat(OscRecorder):
     def in_port(self) -> int:
         return self.listen_port
 
+    def retarget(self, out_port: int) -> None:
+        """Send to a different port (e.g. one the app announced via OSCQuery)."""
+        self.out_port = out_port
+        self._client = SimpleUDPClient(self.host, out_port)
+
     # --- things VRChat does ---------------------------------------------
 
     def set_parameter(self, name: str, value: bool | int | float) -> None:

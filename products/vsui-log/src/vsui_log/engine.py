@@ -194,6 +194,7 @@ class Engine:
         self.night: ActiveNight | None = None
         self.recent_segments: list[tuple[datetime, datetime]] = []
         self.last_pose_at: datetime | None = None
+        self.pose_count = 0
         self.last_osc_at: datetime | None = None
         self.vrmode: int | None = None
         self.last_motion: float | None = None
@@ -206,6 +207,7 @@ class Engine:
         if pose is None:
             return
         with self.lock:
+            self.pose_count += 1
             self.last_pose_at = self.last_osc_at = ts
             if self.current is not None:
                 self.current.pose_seen = True
