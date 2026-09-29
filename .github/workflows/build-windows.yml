@@ -65,8 +65,10 @@ jobs:
         shell: bash
         working-directory: products/${{ steps.meta.outputs.name }}
         run: |
-          pyinstaller --noconfirm --onedir --name "${{ steps.meta.outputs.name }}" \
-            --paths src "${{ steps.meta.outputs.entry }}"
+          extra=""
+          [ -f pyinstaller.args ] && extra=$(cat pyinstaller.args)
+          pyinstaller --noconfirm --onedir --console --name "${{ steps.meta.outputs.name }}" \
+            --paths src $extra "${{ steps.meta.outputs.entry }}"
 
       - name: Assemble zip
         shell: bash
@@ -77,7 +79,9 @@ jobs:
           mkdir -p "$out"
           cp -r "dist/$name/." "$out/"
           cp README.md EULA.md CHANGELOG.md "$out/"
-          [ -f THIRD_PARTY.md ] && cp THIRD_PARTY.md "$out/" || true
+          for f in THIRD_PARTY.md GIMMICK_SPEC.md; do [ -f "$f" ] && cp "$f" "$out/"; done
+          # Smoke test: the frozen exe must at least start and print its version.
+          "$out/$name.exe" --version
           cd dist && 7z a -tzip "$name-$ver-win64.zip" "$name-$ver-win64" > /dev/null
           ls -la
 

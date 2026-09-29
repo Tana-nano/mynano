@@ -183,3 +183,11 @@ def test_pose_recorder_csv_is_numbers_only(tmp_path):
     rows = list(csv.reader(path.open(encoding="utf-8")))
     assert rows[0] == ["t", "x", "y", "z", "rx", "ry", "rz"]
     assert len(rows) == 2 and all(float(c) or float(c) == 0 for c in rows[1])
+
+
+def test_card_names_line_truncates():
+    from vsui_log.card import NAMES_MAX_CHARS, names_line
+    assert names_line("来客: ", ["A", "B"]) == "来客: A、B"
+    long = names_line("来客: ", [f"LongDisplayName{i}" for i in range(8)])
+    assert len(long) <= NAMES_MAX_CHARS + 8 and long.endswith("人") and "ほか" in long
+    assert len(names_line("来客: ", ["x" * 100])) <= NAMES_MAX_CHARS

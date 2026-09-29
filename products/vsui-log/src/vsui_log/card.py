@@ -39,6 +39,21 @@ def find_font(candidates: list[str] | None = None) -> str | None:
     return None
 
 
+NAMES_MAX_CHARS = 40
+
+
+def names_line(label: str, names: list[str], limit: int = NAMES_MAX_CHARS) -> str:
+    """'label: a、b、c' shortened to fit the card, e.g. 'label: a、b …ほか3人'."""
+    shown: list[str] = []
+    for i, n in enumerate(names):
+        rest = len(names) - i - 1
+        candidate = label + "、".join(shown + [n]) + (f" …ほか{rest}人" if rest else "")
+        if len(candidate) > limit and shown:
+            return label + "、".join(shown) + f" …ほか{len(names) - len(shown)}人"
+        shown.append(n if len(n) <= limit - len(label) else n[: limit - len(label) - 1] + "…")
+    return label + "、".join(shown)
+
+
 def card_lines(v: TonightView, streak: int, show_names: bool) -> list[tuple[str, int, tuple[int, int, int]]]:
     """(text, font size, color) from top to bottom. Names appear only if show_names."""
     lines = [(f"{fmt_date(v.date)}の夜", 40, MUTED)]
@@ -51,9 +66,9 @@ def card_lines(v: TonightView, streak: int, show_names: bool) -> list[tuple[str,
     lines.append((f"一緒に寝た人 {len(v.co_sleepers)}人 ・ 来客 {len(v.visitors)}人", 44, FG))
     if show_names:
         if v.co_sleepers:
-            lines.append(("一緒に: " + "、".join(v.co_sleepers), 30, MUTED))
+            lines.append((names_line("一緒に: ", v.co_sleepers), 30, MUTED))
         if v.visitors:
-            lines.append(("来客: " + "、".join(x.name for x in v.visitors), 30, MUTED))
+            lines.append((names_line("来客: ", [x.name for x in v.visitors]), 30, MUTED))
     if streak >= 2:
         lines.append((f"{streak}日連続", 36, ACCENT))
     return lines
