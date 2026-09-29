@@ -1,0 +1,26 @@
+# 商品メタデータ（scripts/package.py, scripts/release_check.py が読む）
+
+[product]
+name = "vsui-log"
+display_name = "V睡ログ"
+version = "0.1.0"
+kind = "pc-app"
+price_jpy = 800                  # オーナー決定 2026-09-29。根拠: docs/market/system-tool-candidates-2026-09.md（¥800〜1,500 帯）
+entry = "src/vsui_log/__main__.py"
+package = "vsui_log"
+
+[support]
+pc_vr = true
+desktop = true                   # ログ由来の記録のみ。動き検知は VR のみ（README に明記）
+quest_standalone = false
+windows_min = "10"
+requires = ["VRChat (OSC 有効)"]
+optional = ["OyasumiVR 1.11 以上（スリープモード連携）"]
+
+[deps]
+python-osc = "MIT"
+# OSCQuery 用ライブラリは /vrc-spec で確定（候補: zeroconf(LGPL) / tinyoscquery(MIT)）。要ライセンス確認
+
+[dist]
+include = ["README.md", "EULA.md", "CHANGELOG.md", "THIRD_PARTY.md", "src/", "requirements.txt"]
+exclude = ["tests/", "docs/", "dist/", "__pycache__/"]
