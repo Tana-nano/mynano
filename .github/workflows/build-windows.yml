@@ -1,0 +1,88 @@
+# Builds a Windows exe for one product with PyInstaller and uploads
+# products/<name>/dist/<name>-<version>-win64.zip as a workflow artifact.
+#
+# Trigger either by pushing a tag  v<version>-<name>  (e.g. v0.1.0-vsui-log)
+# or manually from the Actions tab with the product name.
+# The owner downloads the artifact and uploads it to Booth; nothing is built locally.
+
+name: build-windows
+
+on:
+  push:
+    tags: ["v*-*"]
+  workflow_dispatch:
+    inputs:
+      product:
+        description: "products/<name>"
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve product name
+        id: meta
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.product }}" ]; then
+            name="${{ github.event.inputs.product }}"
+          else
+            # tag v0.1.0-vsui-log -> vsui-log
+            name="${GITHUB_REF_NAME#v*-}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          version=$(python -c "import tomllib;print(tomllib.load(open('products/$name/product.toml','rb'))['product']['version'])")
+          entry=$(python -c "import tomllib;print(tomllib.load(open('products/$name/product.toml','rb'))['product']['entry'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "entry=$entry" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        shell: bash
+        run: |
+          pip install pyinstaller
+          pip install -r "products/${{ steps.meta.outputs.name }}/requirements.txt"
+
+      - name: Release checks
+        run: python scripts/release_check.py ${{ steps.meta.outputs.name }}
+
+      - name: PyInstaller
+        shell: bash
+        working-directory: products/${{ steps.meta.outputs.name }}
+        run: |
+          pyinstaller --noconfirm --onedir --name "${{ steps.meta.outputs.name }}" \
+            --paths src "${{ steps.meta.outputs.entry }}"
+
+      - name: Assemble zip
+        shell: bash
+        working-directory: products/${{ steps.meta.outputs.name }}
+        run: |
+          name="${{ steps.meta.outputs.name }}"; ver="${{ steps.meta.outputs.version }}"
+          out="dist/$name-$ver-win64"
+          mkdir -p "$out"
+          cp -r "dist/$name/." "$out/"
+          cp README.md EULA.md CHANGELOG.md "$out/"
+          [ -f THIRD_PARTY.md ] && cp THIRD_PARTY.md "$out/" || true
+          cd dist && 7z a -tzip "$name-$ver-win64.zip" "$name-$ver-win64" > /dev/null
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.name }}-${{ steps.meta.outputs.version }}-win64
+          path: products/${{ steps.meta.outputs.name }}/dist/*-win64.zip
+          if-no-files-found: error

@@ -1,0 +1,26 @@
+# 商品メタデータ。products/<name>/product.toml にコピーして埋める。
+# scripts/package.py と scripts/release_check.py がこのファイルを読む。
+
+[product]
+name = "example-tool"          # ディレクトリ名と同じ（英小文字・ハイフン）
+display_name = "サンプルツール"  # Booth に載せる商品名
+version = "0.1.0"              # SemVer。出品ごとに上げる
+kind = "pc-app"                # pc-app | blender-addon | seller-tool | other
+price_jpy = 1000               # 想定価格。根拠は docs/market/ に
+entry = "src/example_tool/__main__.py"   # PyInstaller のエントリ（pc-app のとき）
+package = "example_tool"       # src/ 配下の Python パッケージ名
+
+[support]
+pc_vr = true
+desktop = true
+quest_standalone = false       # PC アプリは必ず false。README/商品説明に明記される
+windows_min = "10"
+requires = ["VRChat (OSC 有効)"]   # 前提ソフト。例: "OyasumiVR 1.13+", "OBS Studio 30+ (websocket 有効)"
+
+[deps]
+# 実行時に同梱される Python ライブラリと、そのライセンス。他者アセットはここに書かない（同梱禁止）。
+python-osc = "MIT"
+
+[dist]
+include = ["README.md", "EULA.md", "CHANGELOG.md", "src/", "requirements.txt"]
+exclude = ["tests/", "docs/", "dist/", "__pycache__/"]

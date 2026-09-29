@@ -1,0 +1,8 @@
+2026.09.29 23:40:59 Log        -  [Behaviour] Joining wrld_4432ea9b-729c-46e3-8eaf-846aa0a37fdd:67646~private(usr_00000000-0000-0000-0000-000000000001)~region(jp)
+2026.09.29 23:40:59 Log        -  [Behaviour] Entering Room: Sample Sleep World
+2026.09.29 23:41:02 Log        -  [Behaviour] OnPlayerJoined FixtureMe (usr_00000000-0000-0000-0000-000000000001)
+2026.09.29 23:41:07 Log        -  [Behaviour] OnPlayerJoined FixtureAlice (usr_00000000-0000-0000-0000-00000000000a)
+2026.09.30 00:12:40 Log        -  [Behaviour] OnPlayerJoined Fixture Bob (usr_00000000-0000-0000-0000-00000000000b)
+2026.09.30 01:03:15 Log        -  [Behaviour] OnPlayerLeft Fixture Bob (usr_00000000-0000-0000-0000-00000000000b)
+2026.09.30 06:58:00 Log        -  [Behaviour] OnPlayerLeft FixtureAlice (usr_00000000-0000-0000-0000-00000000000a)
+2026.09.30 07:01:22 Log        -  [Behaviour] OnLeftRoom
