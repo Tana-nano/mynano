@@ -1,6 +1,6 @@
 # V睡ログ 仕様  v0.1
 
-作成日: 2026-09-29 / 企画: `docs/concept.md`
+作成日: 2026-09-29 / レビュー反映: 2026-09-29 / 企画: `docs/concept.md`
 
 ## 概要
 
@@ -26,10 +26,10 @@ VRChat のログから「どのワールドで・誰と一緒に・寝ている�
 | アドレス | 型 | 送信元 | 用途 |
 |---|---|---|---|
 | `/tracking/vrsystem/head/pose` | 6×float（位置 X,Y,Z / オイラー角 X,Y,Z） | VRChat | 動き量 → 入眠・起床判定 |
-| `/avatar/parameters/AFK` | bool | VRChat（組み込み・読み取り専用） | true = HMD 非装着 → 睡眠セッションを終了 |
-| `/avatar/parameters/VRMode` | int（1=VR, 0=デスクトップ） | VRChat（組み込み） | 0 ならログのみモード |
+| `/avatar/parameters/AFK` | bool | VRChat（組み込み・読み取り専用） | `afk_minutes` 以上 true が続いたら睡眠セッションを終了。**OSC で出力されるかは未検証**（出力されなければこの終了条件は働かないだけ） |
+| `/avatar/parameters/VRMode` | int（1=VR, 0=デスクトップ） | VRChat（組み込み） | 0 ならログのみモード。**OSC で出力されるかは未検証**（未受信なら「head pose を受信したか」でモードを決める） |
 | `/avatar/change` | string（avatar id） | VRChat | アバター変更で組み込みパラメータが再送されるきっかけ（記録はしない） |
-| `oyasumi.address` の設定値（既定 `/avatar/parameters/VsuiLog/OyasumiSleep`） | bool | OyasumiVR（任意） | true/false で入眠/起床を強制（自前判定より優先） |
+| `oyasumi.address` の設定値（既定 `/avatar/parameters/VsuiLog/OyasumiSleep`） | bool | OyasumiVR（任意） | true/false で入眠/起床を強制（自前判定より優先）。経路は 2 つ: (a) OyasumiVR → VRChat → 本アプリ。**アバターに同名の bool パラメータが必要**（VRChat はアバターに存在するパラメータしか外に出さない） (b) OyasumiVR の Custom target（未リリース）→ 本アプリの `osc.direct_port` へ直送 |
 
 - **送信レート: 未確認。** 判定はレートに依存しない設計にする（受信サンプルを 60 秒窓に集約）。
 - **座標の単位（m / 度）: 未確認。** 位置は m、角度は度と仮定し、閾値は設定で変更可能。実機データで確定させる（UNVERIFIED）。
@@ -45,6 +45,8 @@ VRChat のログから「どのワールドで・誰と一緒に・寝ている�
 - mDNS: `zeroconf` で `_oscjson._tcp.local.` と `_osc._udp.local.` を広告。サービス名は `VsuiLog-<4桁乱数>`
 - フォールバック: 設定 `osc.mode = "fixed"` なら OSCQuery を使わず `osc.listen_port`（既定 9001）で受信。
   既定は `auto`（OSCQuery を試し、HTTP/mDNS の起動に失敗したら fixed へ）
+- 直送ポート: モードに関わらず `osc.direct_port`（既定 9010）でも同じディスパッチャで受信する。外部ツール（OyasumiVR の Custom target 等）が本アプリを直接狙うための固定窓口。使用中なら警告して無効化（致命ではない）
+- mDNS の TXT レコードに `txtvers=1` を付ける（vrc-oscquery-lib と同じ）
 
 ### VRChat ログ
 
@@ -71,7 +73,10 @@ VRChat のログから「どのワールドで・誰と一緒に・寝ている�
 同席者から自分を除くため、自分の表示名が必要。
 
 1. 設定 `self.display_name` があればそれを使う
-2. 無ければ、各インスタンスで**最初の** `OnPlayerJoined` を自分の候補とし、3 インスタンス連続で同じ名前なら自分と確定して設定に保存する（UNVERIFIED: 実ログでは自分が最初に来る想定）
+2. ログの認証行 `^\[Behaviour\] User Authenticated: (?P<name>.+?)(?: \((?P<user_id>usr_[0-9a-f-]+)\))?$`（`[log.patterns].authenticated` で差し替え可）が見つかればそれを自分とし、設定に保存する（UNVERIFIED: 行の有無と形式は実ログで確認）
+3. どちらも無ければ、各インスタンスで**最初の** `OnPlayerJoined` を自分の候補とし、3 インスタンス連続で同じ名前なら自分と確定して設定に保存する（UNVERIFIED: 実ログでは自分が最初に来る想定）
+
+自分が確定するまでは同席者・来客を確定しない（人物データを保存しない）。
 
 ### 設定ファイル
 
@@ -87,7 +92,7 @@ VRChat のログから「どのワールドで・誰と一緒に・寝ている�
 | テーブル | 主な列 |
 |---|---|
 | `nights` | id, night_date, mode(`vr`/`log_only`), world_id, world_name, instance_access, sleep_start, sleep_end, sleep_minutes, awakenings, source(`motion`/`oyasumi`/`log`) |
-| `people` | id, display_name, user_id, first_seen, is_self |
+| `people` | id, display_name, user_id, first_seen, is_self。**同席者または来客として確定した時にだけ行を作る**。起床中に会っただけの人は保存しない |
 | `presence` | night_id, person_id, joined_at, left_at, role(`co_sleeper`/`visitor`), thanked(bool) |
 | `samples` | ts, motion（60 秒窓ごとの動き量。調整・デバッグ用。30 日で自動削除） |
 | `achievements` | key, unlocked_at |
@@ -164,7 +169,7 @@ exe をダブルクリックすると `run` が起動する。それ以外はコ
 ```
 AWAKE ──(motion < sleep_threshold が sleep_minutes 窓連続)──▶ ASLEEP
 ASLEEP ──(motion > wake_threshold が wake_minutes 窓連続)──▶ AWAKE
-ASLEEP ──(AFK=true / OnLeftRoom / データなし窓が gap_minutes 連続 / アプリ終了)──▶ AWAKE（セッション終了）
+ASLEEP ──(AFK=true が afk_minutes 連続 / OnLeftRoom / データなし窓が gap_minutes 連続 / アプリ終了)──▶ AWAKE（セッション終了）
 任意 ──(OyasumiVR true)──▶ ASLEEP、(OyasumiVR false)──▶ AWAKE
 ```
 
@@ -174,12 +179,16 @@ ASLEEP ──(AFK=true / OnLeftRoom / データなし窓が gap_minutes 連続 /
 | `detect.wake_threshold` | 0.30 | 仮値。寝返り程度では起床にしないため睡眠閾値の 10 倍 |
 | `detect.sleep_minutes` | 10 | 一般的な入眠判定の目安（10 分静止） |
 | `detect.wake_minutes` | 3 | 寝返り 1 回で起床扱いにしない |
-| `detect.gap_minutes` | 10 | 受信が途切れたらセッションを閉じる |
+| `detect.gap_minutes` | 10 | 受信が途切れたらセッションを閉じる。**終了時刻は最後に受信したサンプルの時刻**（判断した時刻ではない） |
+| `detect.afk_minutes` | 2 | AFK が一瞬 true になっても（HMD が緩む）終了しない |
+| `detect.max_jump` | 1.0 | 1 サンプル間で位置がこれ（m）を超えて動いたら外れ値として捨てる（トラッキング復帰時の飛び対策）。仮値 |
+| `detect.frozen_samples` | 20 | 位置・角度が完全に同一のサンプルがこの数連続したら「トラッキング喪失」とみなし、その窓を「データなし」にする（静止と区別する。実機でも完全に同一値が続くことは無い想定。UNVERIFIED） |
 | `detect.sensitivity` | `normal` | `low`/`normal`/`high` で閾値を 0.5×/1×/2× |
 
 - 入眠時刻＝静止が始まった窓の開始時刻（確定の `sleep_minutes` 分前に遡る）
 - 起床時刻＝動きが始まった窓の開始時刻
-- 同じ夜の中で、起床から `detect.merge_minutes`（既定 30）以内に再入眠したら 1 つの夜に統合し `awakenings` を +1
+- 同じ夜の中で、起床から `detect.merge_minutes`（既定 30）以内に再入眠したら 1 つの夜に統合し `awakenings` を +1。**終了理由（動き／AFK／データなし／OnLeftRoom）を問わず統合する**（HMD を付け直した、VRChat が落ちて入り直した、を 1 つの夜にする）
+- データなし窓・トラッキング喪失窓は入眠判定の「静止連続」にも起床判定の「動き連続」にも数えない（連続カウントを保留する）
 
 ### 夜（night）の単位と日付
 
@@ -188,9 +197,14 @@ ASLEEP ──(AFK=true / OnLeftRoom / データなし窓が gap_minutes 連続 /
 
 ### ログのみモード
 
-VRMode=0 のとき、または head pose を 10 分以上受信できないまま `OnLeftRoom` まで滞在した場合。
-インスタンス滞在（Joining〜OnLeftRoom）のうち、**滞在 60 分以上かつ 0:00〜6:00 を含むもの**を夜として記録し、
-`sleep_*` は NULL、`source = log`。まとめでは「睡眠時間は計測していません（デスクトップ）」と表示。
+モードはインスタンス滞在ごとに決める: 滞在中に head pose を 1 回でも受信すれば `vr`、無ければ `log_only`（VRMode=0 を受信した場合も `log_only`）。
+
+インスタンス滞在（Joining〜OnLeftRoom）のうち、**滞在 60 分以上かつ 0:00〜6:00 を含むもの**で、動き判定による夜が 1 つも確定しなかった場合は、
+`sleep_*` を NULL、`source = log` の夜として記録する。まとめの表示:
+- `log_only`: 「睡眠時間は計測していません（デスクトップモード）」
+- `vr` なのに未確定: 「動きからは入眠を判定できませんでした。`detect.sensitivity = "high"` を試してください」（閾値が仮値の間の安全網）
+
+同席者・来客はどちらの場合も滞在区間（睡眠区間の代わり）で判定する。
 
 ### 同席者と来客
 
@@ -210,6 +224,11 @@ VRMode=0 のとき、または head pose を 10 分以上受信できないま�
 | `popular` | 人気者 | 1 夜で来客 5 人以上 |
 | `together_10` | いつものメンバー | 同じ人と 10 夜 |
 
+### 実装上の注意（Windows）
+
+- コンソールは cp932 のことがある。起動時に `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` 相当を行い、表示できない文字（💤 など）で落ちない
+- パスは `pathlib`、既定ディレクトリは環境変数から組み立て、テストでは引数で差し替える
+
 ## エラーと復旧
 
 | 状況 | 挙動 |
@@ -221,7 +240,8 @@ VRMode=0 のとき、または head pose を 10 分以上受信できないま�
 | ポート使用中（fixed モード） | エラー表示で終了。「他の OSC アプリと競合しています。`osc.mode = "auto"` を推奨」 |
 | mDNS 起動失敗（auto） | fixed に切り替えて続行し、ステータスに `OSC: 固定ポート` と表示 |
 | DB ロック／破損 | 起動時に `vsui.db` を `vsui.db.broken-<日時>` に退避して新規作成、警告 |
-| 実行中にクラッシュ | 進行中の夜は 60 秒ごとにチェックポイント保存しているので、次回起動時に復元して確定 |
+| 実行中にクラッシュ | 進行中の夜は 60 秒ごとにチェックポイント保存しているので、次回起動時に復元して確定。起床時刻＝最後のチェックポイント時刻 |
+| `osc.direct_port` が使用中 | 警告して直送窓口だけ無効化。常駐は続ける |
 | フォントなし | `card` のみ失敗。案内を表示 |
 
 ## 設定項目一覧（config.toml）
@@ -233,6 +253,7 @@ display_name = ""          # 空なら自動判定
 [osc]
 mode = "auto"              # auto | oscquery | fixed
 listen_port = 9001         # fixed モードの受信ポート
+direct_port = 9010         # 外部ツール直送用（常時）。0 で無効
 send_host = "127.0.0.1"
 send_port = 9000
 send_parameters = true     # VsuiLog/Sleeping, VsuiLog/Visitors を送る
@@ -254,13 +275,16 @@ angle_weight = 0.01
 sleep_minutes = 10
 wake_minutes = 3
 gap_minutes = 10
+afk_minutes = 2
 merge_minutes = 30
 min_samples = 5
+max_jump = 1.0
+frozen_samples = 20
 co_sleeper_minutes = 30
 
 [log]
 directory = ""             # 空なら %LOCALAPPDATA%Low\VRChat\VRChat
-[log.patterns]             # 空なら既定の正規表現
+[log.patterns]             # 空なら既定の正規表現（joining, entering_room, player_joined, player_left, left_room, authenticated）
 
 [output]
 directory = ""             # 空なら Documents\VsuiLog
@@ -279,7 +303,10 @@ README の「既知の制限」に転記する。
 | head pose の送信レート・単位（m / 度） | **未検証**。閾値は仮値。実機データで調整予定 |
 | VRChat が本アプリを OSCQuery で発見するか（mDNS、Windows ファイアウォール） | **未検証**。失敗時は fixed モードで回避可能 |
 | OyasumiVR と同時起動時の OSC 配信 | **未検証**（両方 OSCQuery 対応のため問題ない想定） |
-| 実ログの行形式（`(usr_…)` の有無、自分が最初に Join として記録されるか） | **未検証** |
+| 実ログの行形式（`(usr_…)` の有無、`User Authenticated` 行の有無、自分が最初に Join として記録されるか） | **未検証** |
+| AFK / VRMode が OSC で出力されるか | **未検証**。出力されなくても動く設計 |
+| トラッキング喪失時に VRChat が送る値（同一値の繰り返しか、送信停止か） | **未検証**。どちらでも「データなし」になる設計 |
+| ヘッドセットが外れたまま朝まで寝た場合 | 外れた時刻で夜が終わる（仕様どおり。README に明記） |
 | デスクトップモードの入眠検知 | 非対応（ログのみ） |
 | Quest 単機 | 非対応 |
 
@@ -290,6 +317,10 @@ README の「既知の制限」に転記する。
 - 削除: `vsui-log forget <名前>` / `forget --all`、またはフォルダ `%APPDATA%\VsuiLog` を削除
 - README に「来客・同席者の名前を本人の同意なく公開しないでください」と明記
 - HTTP サーバーは `127.0.0.1` にのみバインド
+
+## 公開する付属文書
+
+- `docs/gimmick-spec.md`: 対応ギミック仕様（`VsuiLog/Sleeping`, `VsuiLog/Visitors`, `VsuiLog/OyasumiSleep` の型と意味、送信タイミング、Modular Avatar での受け方の例は**文章のみ**）。無料公開・再配布可
 
 ## 依存ライブラリ
 
