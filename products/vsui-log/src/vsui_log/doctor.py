@@ -13,6 +13,7 @@ from typing import Any, Callable
 from .card import find_font
 from .logparse import LogParser
 from .logtail import LOG_GLOB
+from .oscio import set_exclusive
 from .paths import AppPaths
 
 _USR = re.compile(r"usr_[0-9a-fA-F-]+")
@@ -60,9 +61,12 @@ def log_sample(log_dir: Path, parser: LogParser, limit: int = 20) -> list[str]:
 
 
 def port_free(port: int) -> bool:
+    """True if nothing holds ``port``. Binds the wildcard address exclusively so that another
+    app's 0.0.0.0 socket is not missed (a plain 127.0.0.1 bind can succeed next to it on Windows)."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        set_exclusive(s)
         try:
-            s.bind(("127.0.0.1", port))
+            s.bind(("0.0.0.0", port))
             return True
         except OSError:
             return False

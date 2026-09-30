@@ -155,9 +155,25 @@ def zeroconf_advertise(name: str, http_port: int, osc_port: int) -> Callable[[],
     return close
 
 
+def set_exclusive(sock: socket.socket) -> None:
+    """Refuse to share the port. Windows otherwise lets 127.0.0.1 be bound over another
+    app's 0.0.0.0 on the same port, silently taking its OSC traffic."""
+    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+        # UNVERIFIED: behaviour on real Windows with another OSC app on the port.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)  # type: ignore[attr-defined]
+
+
+class ExclusiveUDPServer(ThreadingOSCUDPServer):
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        set_exclusive(self.socket)
+        super().server_bind()
+
+
 def _udp_server(port: int, dispatcher: Dispatcher) -> ThreadingOSCUDPServer:
     try:
-        return ThreadingOSCUDPServer((LOOPBACK, port), dispatcher)
+        return ExclusiveUDPServer((LOOPBACK, port), dispatcher)
     except OSError:
         raise PortInUse(port) from None
 
