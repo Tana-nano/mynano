@@ -247,7 +247,7 @@ Enter 待ちは、`--` で始まるオプションが 1 つも無く、かつ `-
 ## 設定項目一覧
 
 CLI オプション（上表）と規則表 `rules.json` が全て。設定ファイルは作らない。
-既定値の根拠: 90 日は SDK や推奨 Unity 版が変わりうる周期の目安（根拠は運用上の判断であり、公式の周期ではない）／50 MB は Editor.log を数秒で読める上限（実測はしていない）／走査 20,000 エントリは大きなプロジェクトでも数秒で終わる目安（同上）。**いずれも `rules.json` ではなく定数として持ち、README に書く。**
+既定値の根拠: 90 日は SDK や推奨 Unity 版が変わりうる周期の目安（根拠は運用上の判断であり、公式の周期ではない）／50 MB は Editor.log を数秒で読める上限（2026-09-30 実測: Linux の 4 コア環境で 60 MB・53 万行のログの末尾 50 MB を 4.1 秒。Windows 実機では未測定）／走査 20,000 エントリは大きなプロジェクトでも数秒で終わる目安（同上）。**いずれも `rules.json` ではなく定数として持ち、README に書く。**
 
 ## 既知の制限・未検証事項
 
@@ -276,7 +276,7 @@ CLI オプション（上表）と規則表 `rules.json` が全て。設定フ�
 ## ビルド
 
 - 依存: 標準ライブラリのみ。`requirements.txt` は空（コメントのみ）。
-- `pyinstaller.args`: `--collect-submodules upload_doctor --collect-data upload_doctor`（`rules.json` を exe に同梱するため）。
+- `pyinstaller.args`: `--collect-submodules upload_doctor --add-data src/upload_doctor/rules.json;upload_doctor`（`rules.json` を exe に同梱するため。区切りの `;` は Windows 用。最初に使った `--collect-data upload_doctor` は、CI が `--paths src` で探索パスに足すだけのパッケージを見つけられず、何も同梱されなかった＝`--self-check` の起動確認で検出）。
 - `smoke.args`: `--no-pause --no-report`（CI にはプロジェクトも Editor.log も無いので「プロジェクトのフォルダでない」で終了コード 2 になってしまう）。そのため **`--self-check` を追加する**: 同梱の `rules.json` を読み込んで検証し、内蔵の最小の偽プロジェクトを一時フォルダ（`tempfile`、終了時に削除）に作って診断まで通し、終了コード 0 を返す。**これが「レポート以外に書かない」の唯一の例外**で、書く先は一時フォルダだけ。`smoke.args` は `--self-check --no-pause`。CI の合格は 0 または 1（既存の仕組みどおり）。
   - `--self-check` は隠しオプション（README には書かない。サポート用に `--version` と並べて残すのは可）。
 

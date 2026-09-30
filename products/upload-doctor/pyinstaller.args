@@ -1,1 +1,1 @@
---collect-submodules upload_doctor --collect-data upload_doctor
+--collect-submodules upload_doctor --add-data src/upload_doctor/rules.json;upload_doctor
