@@ -93,7 +93,7 @@ python scripts/release_check.py <name> # 出品前チェック
   HOST_INFO の `OSC_PORT` を優先して確認する（実装例: `products/osc-doctor`）。
 - **ブロックされるサイト**: booth.pm と feedback.vrchat.com は直接取得できないことがある。検索結果の要約で
   代用した場合は、そのことを調査ノートに書く。
-- **既存商品**: `vsui-log`（V睡ログ、有料）、`osc-doctor`（OSCドクター、無料・ショップの入口）。
+- **既存商品**: `vsui-log`（V睡ログ、有料）、`osc-doctor`（OSCドクター、無料・ショップの入口）、`upload-doctor`（アップロードドクター、無料・出品者チャネルの入口）。
   新商品の booth.md の「同じ作者のツール」に並べ、既存商品の booth.md にも追記して相互に紹介する。
 - **並行セッション**: 別セッションで別商品を作るときは、`shared/`・`scripts/`・`.github/`・このファイルの
   変更は小さく分けて早めに master へ取り込み、衝突を避ける。商品フォルダの中は自由に変えてよい。
