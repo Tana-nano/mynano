@@ -1,0 +1,9 @@
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe
+-projectpath
+C:/Users/FixtureUser/VRC/FixtureAvatar
+Starting compilation
+Finished compiling graph: 12 nodes, 34 flushed
+Assets/FixtureShop/Scripts/Legacy.cs(4,2): warning CS0618: 'Foo' is obsolete
+Reloading assemblies after forced synchronous recompile.
+Asset Pipeline Refresh (id=0000): Total: 0.123 seconds

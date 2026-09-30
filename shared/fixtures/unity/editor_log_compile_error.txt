@@ -1,0 +1,21 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe
+-projectpath
+C:/Users/FixtureUser/VRC/FixtureAvatar
+-useHub
+Refreshing native plugins compatible for Editor in 2.31 ms, found 3 plugins.
+Starting compilation
+Assets/FixtureShop/Scripts/FixtureBone.cs(10,5): error CS0246: The type or namespace name 'DynamicBone' could not be found (are you missing a using directive or an assembly reference?)
+Assets/FixtureShop/Scripts/FixtureBone.cs(22,9): error CS0246: The type or namespace name 'DynamicBoneCollider' could not be found (are you missing a using directive or an assembly reference?)
+Assets/Fixture Folder (1)/Menu.cs(3,7): error CS0234: The type or namespace name 'modular_avatar' does not exist in the namespace 'nadena.dev' (are you missing an assembly reference?)
+Assets/VRCSDK/SDK3/Runtime/UnityEventFilter.cs(1018,24): error CS0246: The type or namespace name 'Cinemachine' could not be found (are you missing a using directive or an assembly reference?)
+Library/PackageCache/com.unity.ugui@1.0.0/Runtime/UI/Core/Graphic.cs(5,1): error CS0101: The namespace 'UnityEngine.UI' already contains a definition for 'Graphic'
+Assets/FixtureShop/Scripts/Legacy.cs(4,2): warning CS0618: 'Foo' is obsolete
+Reloading assemblies after forced synchronous recompile.
+Assets/FixtureShop/Scripts/FixtureBone.cs(10,5): error CS0246: The type or namespace name 'DynamicBone' could not be found (are you missing a using directive or an assembly reference?)
+Assets/FixtureShop/Scripts/FixtureBone.cs(22,9): error CS0246: The type or namespace name 'DynamicBoneCollider' could not be found (are you missing a using directive or an assembly reference?)
+[Error] 21:40:12 Assets/FixtureShop/Scripts/FixtureBone.cs(10,5): error CS0246: The type or namespace name 'DynamicBone' could not be found (are you missing a using directive or an assembly reference?)
+DllNotFoundException: FixtureNative assembly:<unknown assembly> type:<unknown type> member:(null)
+  at FixtureNative.Init () [0x00000] in <00000000000000000000000000000000>:0
+Asset Pipeline Refresh (id=0000): Total: 0.123 seconds

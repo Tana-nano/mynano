@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "checked_on": "2026-09-30",
+  "unity": {
+    "supported": ["2022.3.22f1"],
+    "source": "https://raw.githubusercontent.com/vrchat-community/creator-docs/main/Docs/docs/sdk/upgrade/current-unity-version.md"
+  },
+  "sdk": {
+    "min_avatars_for_new_upload": "3.9.0",
+    "confidence": "low",
+    "source": "https://koshishirai.com/en/unity-vrchat-avatar-upload-solution/"
+  },
+  "compile_error_regex": "(?P<file>(?:Assets|Packages|Library)[\\\\/][^\\r\\n:]*?\\.cs)\\((?P<line>\\d+),(?P<col>\\d+)\\): error (?P<code>CS\\d+): (?P<msg>.*)$",
+  "folder_rules": [
+    {
+      "id": "dynamic_bone",
+      "under": "Assets",
+      "name_glob": "Dynamic*Bone*",
+      "max_depth": 2,
+      "level": "info",
+      "confidence": "low",
+      "title": "旧 Dynamic Bone のフォルダがあります",
+      "advice": [
+        "それ自体がアップロードを妨げるとは限りません（残っていると問題になった例が解説記事にある程度です）",
+        "PhysBone への置き換えは、アバターの商品ページの指示に従ってください"
+      ],
+      "source": "https://koshishirai.com/en/unity-vrchat-avatar-upload-solution/"
+    }
+  ],
+  "log_rules": [
+    {
+      "id": "upload.build_failed",
+      "regex": "Failed to build avatar",
+      "level": "warn",
+      "confidence": "low",
+      "title": "アバターのビルドに失敗した記録があります",
+      "advice": ["この行より前にある赤いエラーを確認してください。原因は別の行にあることが多いです"],
+      "source": "https://ask.vrchat.com/t/error-building-avatar-2022-3-6f1/22003"
+    },
+    {
+      "id": "upload.validation_failed",
+      "regex": "Avatar validation failed",
+      "level": "warn",
+      "confidence": "low",
+      "title": "アバターの検証（validation）に失敗した記録があります",
+      "advice": ["Unity の VRChat SDK パネル（Builder 画面）に出ている警告を確認してください"],
+      "source": "https://ask.vrchat.com/t/avatar-validation-failed/25422"
+    },
+    {
+      "id": "upload.blueprint_not_owned",
+      "regex": "we do not own, clearing blueprint id",
+      "level": "warn",
+      "confidence": "mid",
+      "title": "Blueprint ID が別のアカウントのものです",
+      "advice": [
+        "SDK の Pipeline Manager で Detach し、Attach で新しい ID を作ってから上げ直してください（ID は自動で作られます）"
+      ],
+      "source": "https://raw.githubusercontent.com/vrchat-community/creator-docs/main/Docs/docs/sdk/vrcpipelinemanager.md"
+    },
+    {
+      "id": "upload.contentinfo_nre",
+      "regex": "CreateContentInfoGUI",
+      "near_regex": "NullReferenceException",
+      "near_lines": 5,
+      "level": "warn",
+      "confidence": "low",
+      "title": "アップロード画面で例外が出た記録があります",
+      "advice": [
+        "SDK 3.9.x〜3.10.0 で、アップロード後にアバターが出ない不具合の報告があります",
+        "プロジェクトをバックアップしてから、VCC で SDK を最新に更新してください"
+      ],
+      "source": "https://feedback.vrchat.com/sdk-bug-reports/p/avatar-upload-shows-successful-but-does-not-appear-on-vrchat-sdk-39x-3100"
+    }
+  ],
+  "missing_type_hints": [
+    {
+      "match": ["DynamicBone"],
+      "hint": "Dynamic Bone（有料アセット）を参照するスクリプトが残っています。Dynamic Bone を入れるか、参照しているスクリプトを削除",
+      "confidence": "low",
+      "source": "https://koshishirai.com/en/unity-vrchat-avatar-upload-solution/"
+    },
+    {
+      "match": ["VRCFury"],
+      "hint": "VRCFury が入っていません。商品の導入手順に従って VCC で追加",
+      "confidence": "low",
+      "source": "https://vrnavi.jp/vcc-tools-introduction/"
+    },
+    {
+      "match": ["VRC.", "VRC_", "VRCSDK", "VRCAvatar", "VRCExpression"],
+      "exact": ["VRC"],
+      "hint": "VRChat SDK の型です。SDK が入っていないか壊れています。VCC で SDK を入れ直す",
+      "confidence": "low",
+      "source": "https://raw.githubusercontent.com/vrchat-community/creator-docs/main/Docs/docs/sdk/sdk-troubleshooting.md"
+    },
+    {
+      "match": ["nadena.dev", "ModularAvatar"],
+      "hint": "Modular Avatar（または NDMF）が入っていません。商品の導入手順に従って VCC で追加",
+      "confidence": "low",
+      "source": "https://vrnavi.jp/vcc-tools-introduction/"
+    },
+    {
+      "match": ["lilToon"],
+      "hint": "lilToon が入っていないか、バージョンが合っていません。商品の指定するバージョンを入れる",
+      "confidence": "low",
+      "source": "https://vrnavi.jp/vcc-tools-introduction/"
+    },
+    {
+      "match": ["Cinemachine", "Unity.Cinemachine"],
+      "hint": "Unity のパッケージ Cinemachine（com.unity.cinemachine）がありません。Unity の Package Manager で追加",
+      "confidence": "low",
+      "source": "https://ask.vrchat.com/t/errors-in-unity-sdk/12433"
+    }
+  ],
+  "overrides": {}
+}

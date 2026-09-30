@@ -1,0 +1,14 @@
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe
+-projectpath
+"C:/Users/FixtureUser/VRC/Fixture Avatar"
+Starting compilation
+Finished compiling graph: 12 nodes, 34 flushed
+Attempted to load the data for an avatar we do not own, clearing blueprint id
+Building avatar for Windows
+Failed to build avatar!
+Avatar validation failed
+NullReferenceException: Object reference not set to an instance of an object
+  at VRC.SDKBase.Editor.Fixture.Step1 () [0x00000] in <00000000000000000000000000000000>:0
+  at VRC.SDK3A.Editor.VRCSdkControlPanelAvatarBuilder.CreateContentInfoGUI () [0x00000] in <00000000000000000000000000000000>:0
+Upload log for usr_00000000-0000-0000-0000-000000000000 avtr_00000000-0000-0000-0000-000000000001 fixture@example.com
