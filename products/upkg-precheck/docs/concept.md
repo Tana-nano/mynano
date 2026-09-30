@@ -36,7 +36,7 @@
 | 2 | アセット間参照の抽出 | テキスト形式のアセット（.prefab .mat .controller .anim .asset .unity .overrideController .mask など）と `.meta` から `guid: <32桁hex>` を正規表現で集める。Unity YAML は独自タグ（`!u!`）があるので YAML パーサは使わない | https://pkg.go.dev/github.com/r74tech/unitypackage（`{fileID, guid, type}` 形式） | 確認済。**バイナリ保存のアセットは読めない**（下記） |
 | 3 | 新規プロジェクトの既定がテキスト保存か | Unity の Asset Serialization Mode の既定は Force Text | https://github.com/JetBrains/resharper-unity/wiki/Asset-serialization-mode | 確認済（二次資料）。設定を変えた作者のバイナリ資産は「解析できないファイル」として一覧に出す |
 | 4 | 他者アセットの GUID 辞書 | 公式リポジトリの `.meta` から GUID とパスを抽出して辞書化。**この環境で git clone できることを確認**（lilToon 2.3.4: 400、Modular Avatar: 954、Poiyomi: 1,214 個の GUID） | https://github.com/lilxyzw/lilToon , https://github.com/bdunderscore/modular-avatar , https://github.com/poiyomi/PoiyomiToonShader | 確認済。**過去バージョンで GUID が変わっていないかは未確認**（仕様で複数タグから抽出して確かめる） |
-| 5 | VRChat SDK の検出 | パス（`Packages/com.vrchat.*`、`Assets/VRCSDK`）で判定。SDK の GUID 辞書は作らない | SDK は VCC 配布のみ・non-transferable（https://hello.vrchat.com/legal/sdk は egress ブロック、検索要約） | packages.vrchat.com が egress ブロックで SDK の中身を取れない。**SDK 部品への参照（PhysBone など）は「不明な外部参照」に分類される**。仕様で扱いを決める |
+| 5 | VRChat SDK の検出 | パス（`Packages/com.vrchat.*`、`Assets/VRCSDK`）と、アバター向け SDK3 の DLL 6 個の GUID で判定 | SDK は VCC 配布のみ・non-transferable（https://hello.vrchat.com/legal/sdk は egress ブロック、検索要約）。DLL の GUID は Modular Avatar のプレハブの参照と https://github.com/CMoyuer/VRChatAvatarSDK3Container の `.meta` が一致 | SDK 本体は取得できない（packages.vrchat.com が egress ブロック）が、PhysBone などの部品への参照は GUID で「VRChat SDK」と判別できる（仕様レビューで解決） |
 | 6 | 各公式の同梱ルール（案内文の根拠） | lilToon: 制作物と 1 つの unitypackage にまとめるのは非推奨。Poiyomi: `_PoiyomiShaders` を含めない。MA: 同梱は許可だが非推奨、公式配布元へ誘導 | 市場調査ノート「トレンド・公式アップデートの影響」 | Poiyomi・MA は原文確認済。lilToon は検索要約のみ（仕様で原文を再確認） |
 | 7 | zip の読み取り | Python 標準の `zipfile`。UTF-8 フラグの無い日本語ファイル名は cp932 として読み直す | 日本語版 Windows は Shift-JIS でファイル名を保存する（https://github.com/saberzero1/unzip-jp-gui） | 方針のみ。**Booth 購入者の解凍環境で文字化けがどれだけ起きるかは未確認** |
 | 8 | 安全性 | `pathname` の絶対パス・`..`・ドライブ名を異常として報告。展開しないのでツール自体は書き込まない | https://github.com/Cobertos/unitypackage_extractor/issues/14 | 確認済 |
@@ -57,7 +57,7 @@
 | `tarfile` で作った合成 unitypackage（正常 / 混入 / 参照切れ / 異常パス / GUID 衝突）で全判定 | **黄の「入れ忘れ候補」が本当に入れ忘れか**（Unity 標準・SDK・購入者の環境にある物の可能性。Unity で読み込まないと確定できない） |
 | lilToon / MA / Poiyomi の実 `.meta` から作った GUID 辞書で、混入と前提ツール推定 | 実際の Booth 商品の unitypackage での誤検知率（Booth は egress ブロック、有料品は入手不可） |
 | cp932 のファイル名を持つ zip の読み取り | 購入者の Unity で本当にピンクや Missing が出るか |
-| Windows exe のビルドと起動（既存 CI） | VRChat SDK 部品への参照の判別（SDK を取得できない） |
+| Windows exe のビルドと起動（既存 CI） | ワールド向け SDK（Udon）の部品の判別（DLL の GUID 未確認） |
 
 ### 外部依存
 

@@ -1,5 +1,7 @@
 # 出品前チェッカー（unitypackage 検品） 仕様  v0.1
 
+レビュー: 2026-09-30（本物の書き出し lilToon 1.7.0 で tar の内部名と辞書の当たりを確認。VRChat SDK の DLL 識別番号を辞書に追加。パス接頭辞だけの一致を黄に分離。同梱の別パッケージへの参照、フォルダの除外、既知アセット内のスクリプトの扱い、Windows で扱えない名前を追加）
+
 作成日: 2026-09-30 / 企画: `docs/concept.md` / 市場調査: `docs/market/unitypackage-inspector-2026-09.md`
 
 ## 概要
@@ -47,6 +49,11 @@ gzip 圧縮の tar。出典: https://github.com/m35/UnityPackageViewer , https:/
 - `<guid>` は 32 桁の 16 進（小文字に正規化して扱う）。
 - tar は**ストリームモード（`r|gz`）で先頭から 1 回だけ読む**。メンバーはメモリ上で処理し、ディスクへ書かない。
   同じ GUID のメンバーは順不同で来るため、GUID ごとに集めて最後に組み立てる。
+- メンバー名の先頭の `./` は取り除く（Unity の版や書き出しツールによって付く・付かないが分かれる。確認済み: lilToon 1.7.0 の書き出しは付かない。出典: https://gist.github.com/yasirkula/dfc43134fbfefb820d0adbc5d7c25fb3 は `./` を除去している）。
+- ディレクトリのメンバー（`<guid>` 自体）は読み飛ばす。ルート直下のファイル（`.icon.png` など、GUID ディレクトリの外にあるもの）は無視して件数だけ数える（インポート画面のアイコン。出典: https://github.com/foxscore/add-icon-to-unitypackage）。P14 にはしない。
+- `pathname` は UTF-8 として読む（読めない文字は置換し P14）。末尾の改行は取り除き、2 行目以降（`00` などが付くことがある）は捨てる。確認済み: lilToon 1.7.0 の 370 件はすべて 1 行・改行なし。
+- フォルダのエントリは `pathname` と `asset.meta` だけを持ち、`.meta` に `folderAsset: yes` がある。`pathname` は末尾に `/` を付けない（例 `Assets/lilToon`）。フォルダ判定は「`asset` が無い」で行い、`folderAsset` は補助に使う。
+- GUID ディレクトリのうち `pathname` を持たないもの、`<guid>/` の下に既定の 4 種以外の名前があるものは P14。
 - `asset` は全体を読んで SHA-256 を計算する。テキスト解析の対象（下記）だけ、先頭 `--max-text-mb`（既定 64 MB）までメモリに保持する。
   超えたものは「大きすぎて参照を調べていない」と黄で出す。
 
@@ -59,9 +66,10 @@ Unity はアセット間の参照を `{fileID: <数>, guid: <32桁>, type: <数>
   - `asset.meta`（すべて。FBX の材質割り当てなどが入る）
   - `asset` のうち、先頭が `%YAML` で始まるもの（テキスト形式で保存された Unity アセット）
   - `.asmdef` / `.asmref`（JSON 内の `"GUID:<32桁>"`）
-- 正規表現（1 行内で完結する前提。Unity の出力はこの形）:
+- 正規表現（1 行内で完結する前提。Unity の出力はこの形。確認済み: lilToon / Modular Avatar / Poiyomi / VRCFury の全 YAML でこの形以外の `{fileID:` は無かった）:
   `(?:(\w+):\s*)?\{fileID:\s*(-?\d+),\s*guid:\s*([0-9a-fA-F]{32}),\s*type:\s*(\d+)\}`
-  - 1 番目のキー名（`m_Shader`、`m_Script` など）は種類の推定に使う。無い（リストの要素）こともある。
+  - 1 番目のキー名（`m_Shader`、`m_Script` など）は種類の推定に使う。無い（リストの要素 `- {fileID: …}` や `- _FurNoiseMask: {…}`）こともある。
+  - `.meta` の中にも参照がある（シェーダーの `defaultTextures`、FBX の材質割り当てなど。確認済み: lilToon のシェーダー `.meta`）。
   - `.meta` 先頭の自分自身の `guid: xxx` は波括弧が無いので拾わない。
   - GUID が全部 0 のものは「参照なし」なので捨てる。
 - 拡張子が Unity のシリアライズ形式（`.prefab .mat .asset .controller .overrideController .anim .mask .unity .physicMaterial .playable .signal .lighting .renderTexture .flare .guiskin .fontsettings .spriteatlas .terrainlayer .brush .cubemap`）なのに `%YAML` で始まらないものは
@@ -73,13 +81,14 @@ Unity はアセット間の参照を `{fileID: <数>, guid: <32桁>, type: <数>
 
 | 分類 | 条件 | 重さ |
 |---|---|---|
-| 内部 | 同じ実行で読んだいずれかの unitypackage に含まれる | —（数えるだけ） |
+| 内部 | 参照元と同じ unitypackage に含まれる | —（数えるだけ） |
+| 同梱の別パッケージ | 同じ実行で読んだ別の unitypackage にだけ含まれる | 黄（P23。購入者が両方インポートする前提になる） |
 | Unity 組み込み | 先頭 16 桁がすべて 0（`0000000000000000e000000000000000` = unity default resources、`...f000...` = unity_builtin_extra。出典: https://github.com/AssetRipper/AssetRipper/issues/1271） | —（数えるだけ） |
-| 既知の前提ツール | 既知アセット辞書（下記）に載っている | 緑（「購入者に別途導入してもらうもの」） |
-| DLL 内の部品 | キーが `m_Script` で `fileID` が `11500000` 以外（DLL 内のクラスは fileID が型名のハッシュになる。出典: https://forum.unity.com/threads/yaml-fileid-hash-function-for-dll-scripts.252075/）。VRChat SDK の部品（PhysBone など）が主にここに入る想定 | 緑（「DLL の部品を使っています。VRChat SDK なら購入者の環境にあるので問題ありません」） |
+| 既知の前提ツール | 既知アセット辞書（下記）に載っている。VRChat SDK の DLL（PhysBone、アバターディスクリプタなど）もここに入る | 緑（「購入者に別途導入してもらうもの」） |
+| 不明な DLL 内の部品 | キーが `m_Script` で `fileID` が `11500000` 以外（DLL 内のクラスは fileID が型名のハッシュになる。出典: https://forum.unity.com/threads/yaml-fileid-hash-function-for-dll-scripts.252075/）で、GUID が辞書に無い | 緑（「辞書に無い DLL の部品を使っています。購入者に別途導入してもらうツールがあれば説明書に書いてください」） |
 | 見つからないスクリプト | キーが `m_Script` で `fileID` が `11500000` | 黄（「Missing (Script) の原因になります」） |
 | 見つからないシェーダー | キーが `m_Shader` | 黄（「ピンク表示の原因になります」） |
-| 見つからないその他 | 上のどれでもない | 黄（入れ忘れ候補。種類は fileID から推定: `2100000` マテリアル、`2800000` テクスチャ、`4300000` メッシュ、`7400000` アニメーション、`9100000` アニメーターコントローラー。その他は「アセット」） |
+| 見つからないその他 | 上のどれでもない | 黄（入れ忘れ候補。種類は fileID から推定: `2100000` マテリアル、`2800000` テクスチャ、`4300000` メッシュ、`7400000` アニメーション、`9100000` アニメーターコントローラー、`4800000` シェーダー、`8300000` オーディオ、`100100000` と負の大きな値 プレハブ。その他は「アセット」） |
 
 - 見つからない参照は GUID ごとにまとめ、参照しているファイル（pathname）を最大 `--max-referrers`（既定 5）件まで示す。
 - 黄の文面は断定しない: 「パッケージの外を参照しています。Unity の標準パッケージや購入者の環境にあるものなら問題ありません。入れ忘れでないか確認してください。」
@@ -95,11 +104,25 @@ Unity はアセット間の参照を `{fileID: <数>, guid: <32桁>, type: <数>
 | modular-avatar | Modular Avatar | https://github.com/bdunderscore/modular-avatar | 各 `x.y.0` と最新 | `Packages/nadena.dev.modular-avatar/` | 同梱は非推奨（別パッケージも黄） |
 | ndmf | NDMF | https://github.com/bdunderscore/ndmf | 各 `x.y.0` と最新 | `Packages/nadena.dev.ndmf/` | 同梱は非推奨（MA の依存。別パッケージも黄） |
 | vrcfury | VRCFury | https://github.com/VRCFury/VRCFury | 最新 | `Packages/com.vrcfury.vrcfury/` | 同梱不可 |
-| vrchat-sdk | VRChat SDK | （取得できない。パスのみ） | — | `Packages/com.vrchat.`, `Assets/VRCSDK/`, `Assets/Udon/`, `Assets/VRChat Examples/` | 同梱不可 |
+| vrchat-sdk | VRChat SDK | SDK 本体は取得できない。DLL の GUID だけを固定値で持つ（下記） | — | `Packages/com.vrchat.`, `Assets/VRCSDK/`, `Assets/Udon/`, `Assets/VRChat Examples/` | 同梱不可 |
+
+VRChat SDK の DLL の GUID（アバター向け SDK3）。2 つの独立した情報源で一致したものだけを載せる: (a) Modular Avatar のプレハブが `m_Script` で参照している GUID、(b) SDK 互換の置き換え DLL を配る https://github.com/CMoyuer/VRChatAvatarSDK3Container の `.dll.meta`。
+
+| DLL | GUID |
+|---|---|
+| VRCSDK3A.dll | `67cc4cb7839cd3741b63733d5adf0442` |
+| VRCSDKBase.dll | `db48663b319a020429e3b1265f97aff1` |
+| VRC.Dynamics.dll | `cdfe97a8253414b4bb5dd295880489bd` |
+| VRC.SDK3.Dynamics.PhysBone.dll | `2a2c05204084d904aa4945ccff20d8e5` |
+| VRC.SDK3.Dynamics.Contact.dll | `80f1b8067b0760e4bb45023bc2e9de66` |
+| VRCCore-Editor.dll | `4ecd63eff847044b68db9453ce219299` |
+
+ワールド向け SDK（Udon）の DLL は未確認のため載せない（「不明な DLL 内の部品」になる）。
 
 - 各項目に、案内文（日本語）、出典 URL、購入者向けの入手先 URL を持たせる（下記「同梱ルールの根拠」）。
 - 辞書は開発用スクリプト `tools/build_known_assets.py` で作る（配布物には含めない）。git で浅く取得し、指定タグの `.meta` から `guid` とパスを集めて**全タグの和集合**にする。
   - 確認済み: lilToon 1.7.0 と 2.3.4 で共通 364 ファイルの GUID は不一致 0。Modular Avatar 1.9.0 と最新で共通 181 ファイル不一致 0。Poiyomi 8.1.167 と 10.0.23 で共通 293 ファイル中 4 件が変化 → 和集合で両方を持つ。
+  - 確認済み: 本物の書き出し `lilToon_1.7.0.unitypackage`（GitHub リリース、MIT）の 370 個の GUID は、git の `.meta` から作った辞書に 370 個すべて当たった。
   - 異なる配布元の間で GUID が重複したら、スクリプトはエラーで止まる。
 - 辞書のメタ情報として、作成日と各配布元のタグ一覧を JSON に入れ、レポートに「辞書の日付」を表示する。
 
@@ -140,24 +163,28 @@ VRCFury https://vcc.vrcfury.com 、VRChat SDK（VCC） https://vcc.docs.vrchat.c
 | P01 | 赤 | 読めない（gzip / tar として壊れている、空） | 書き出し直す |
 | P02 | 赤 | `pathname` が絶対パス（`/`・`\`・ドライブ名で始まる）か、`..` の区間を含む | 攻撃や破損の疑い。書き出し直す（出典: https://github.com/Cobertos/unitypackage_extractor/issues/14） |
 | P03 | 赤 | tar にシンボリックリンク・ハードリンク・デバイスなど通常ファイル以外がある | 通常の書き出しでは起きない。書き出し直す |
-| P04 | 赤 | 既知アセットの混在: 自作のアセットと同じパッケージに、既知アセット（id が liltoon / poiyomi / modular-avatar / ndmf / vrcfury / vrchat-sdk）のファイルが入っている | 書き出し時に Include dependencies で一緒に選ばれた可能性。該当 id の案内文を表示し、外して書き出し直す |
+| P04 | 赤 | 既知アセットの混在: 自作のアセットと同じパッケージに、**GUID が辞書に当たる**既知アセット（id が liltoon / poiyomi / modular-avatar / ndmf / vrcfury / vrchat-sdk）のファイルが入っている | 書き出し時に Include dependencies で一緒に選ばれた可能性。該当 id の案内文を表示し、外して書き出し直す |
+| P22 | 黄 | 既知アセットのフォルダ名の下のファイル: GUID は辞書に無いが、pathname が既知アセットのパス接頭辞に一致する（新しい版で増えたファイル、Poiyomi の「ロック」で生成された最適化シェーダー、自作ファイルを配布元のフォルダに置いたもの、のどれか） | 「配布元のフォルダの下にあります。配布元のファイルなら外してください。自分で作ったもの（ロックしたシェーダーなど）なら、自分のフォルダに移すことを検討してください」 |
+| P23 | 黄 | 同梱の別パッケージへの参照（分類「同梱の別パッケージ」） | 「購入者が両方インポートする前提です。説明書にインポートの順番を書いてください（共通パッケージ → アバター別パッケージ など）」。下書きの導入手順に反映する |
 | P05 | 赤 | パッケージ全体が vrcfury か vrchat-sdk だけでできている（単独同梱） | ライセンス上同梱できない。削除して入手先を案内する |
 | P06 | 黄 | パッケージ全体が modular-avatar か ndmf だけでできている | 同梱は許可されるが非推奨。公式配布元への案内に替える |
 | P07 | 緑 | パッケージ全体が liltoon か poiyomi だけでできている | 配布元が認める「別パッケージのまま同梱」。版が古くないか確認を促す |
-| P08 | 赤 | 実行ファイル（`.exe .bat .cmd .ps1 .vbs .scr .msi .com .jar .sh`）が入っている | アバター・衣装の unitypackage には通常入らない。意図しないなら外す |
-| P09 | 黄 | `.cs` か `.dll` が入っている | 件数を表示。衣装なら通常入らない。ギミックなら意図どおりか確認 |
-| P10 | 黄 | `.cs` に `InitializeOnLoad`、`Process.Start`、`DllImport`、`UnityWebRequest`、`HttpClient`、`WebClient` のどれかがある | 「Unity 起動時に自動で動く / 外部プログラムを起動する / 通信する処理があります」と事実だけ示す（マルウェア判定はしない。出典: https://github.com/advisories/GHSA-xq92-f676-63w4） |
+| P08 | 赤 | 実行ファイル（`.exe .bat .cmd .ps1 .vbs .scr .msi .com .jar .sh`）が入っている。**既知アセットと判定したエントリも対象** | アバター・衣装の unitypackage には通常入らない。意図しないなら外す |
+| P09 | 黄 | `.cs` か `.dll` が入っている。GUID が辞書に当たるエントリ（配布元そのままのファイル）は数えない。パス接頭辞だけの一致は数える | 件数を表示。衣装なら通常入らない。ギミックなら意図どおりか確認 |
+| P10 | 黄 | `.cs`（P09 と同じ範囲）に `InitializeOnLoad`、`Process.Start`、`DllImport`、`UnityWebRequest`、`HttpClient`、`WebClient` のどれかがある | 「Unity 起動時に自動で動く / 外部プログラムを起動する / 通信する処理があります」と事実だけ示す（マルウェア判定はしない。出典: https://github.com/advisories/GHSA-xq92-f676-63w4） |
 | P11 | 黄 | 見つからないスクリプト・シェーダー・その他の参照（上の分類） | 分類ごとの文面。参照元を示す |
 | P12 | 黄 | Unity のシリアライズ形式なのにバイナリ | Force Text にすれば調べられる |
 | P13 | 黄 | テキスト解析の上限を超えた | 大きすぎて参照を調べていない |
 | P14 | 黄 | `pathname` が `Assets/` でも `Packages/` でも始まらない、GUID 名が 32 桁 16 進でない、`pathname` が無い、`.meta` の guid とディレクトリ名が違う | 書き出し直しを勧める |
 | P15 | 黄 | `pathname` の長さが `--max-path`（既定 150 文字）を超える | Windows ではパスが長いと Unity が扱えないことがある。Unity Asset Store の投稿規約も 150 文字未満（出典: https://assetstore.unity.com/publishing/submission-guidelines） |
-| P16 | 黄 | 大文字小文字だけが違う `pathname` が 2 つ以上ある | Windows では同じ名前として扱われる |
-| P17 | 黄 | `Assets/` 直下にファイルがある、または（既知アセットを除いて）`Assets/` 直下のフォルダが 2 つ以上 | 購入者がインポート先を見失いやすい（出典: https://note.com/efk/n/n45ff5ccb5e88 、egress ブロックのため検索要約） |
+| P16 | 黄 | Windows で扱えない名前: 大文字小文字だけが違う `pathname` が 2 つ以上ある / 区間の名前が予約名（`CON PRN AUX NUL COM1〜9 LPT1〜9`、拡張子付きも）/ 区間の末尾が空白かドット / 名前に `< > : " \| ? *` を含む | Windows では同じ名前として扱われる、または作れない |
+| P17 | 黄 | `Assets/` 直下にファイルがある、または `Assets/` 直下のフォルダ名（ファイルのエントリの `pathname` の 2 番目の区間。フォルダのエントリは数えない。既知アセットのエントリは除く）が 2 つ以上 | 購入者がインポート先を見失いやすい（出典: https://note.com/efk/n/n45ff5ccb5e88 、egress ブロックのため検索要約） |
 | P18 | 黄 | `.zip` か `.unitypackage` が unitypackage の中に入っている | 意図どおりか確認 |
-| P19 | 緑 | 前提ツールの推定: 参照している既知アセット id（混入していないもの） | 下書きの「導入に必要なもの」に載る |
-| P20 | 緑 | DLL 内の部品を参照している | VRChat SDK の部品である可能性が高い旨 |
+| P19 | 緑 | 前提ツールの推定: 参照している既知アセット id（VRChat SDK を含む。同梱している id も載せ、「同梱しています」と添える） | 下書きの「導入に必要なもの」に載る |
+| P20 | 緑 | 辞書に無い DLL 内の部品を参照している | 「購入者に別途導入してもらうツールがあれば説明書に書いてください」 |
 | P21 | 緑 | 同梱物の集計: 種類別の件数と合計サイズ、`Assets/` 直下のフォルダ名 | 下書きの「同梱物」に載る |
+
+P15〜P18 は自作と判定したエントリ（GUID もパス接頭辞も既知アセットに当たらないもの）だけを対象にする。P08 はすべてのエントリ、P09・P10 は上の表のとおり。
 
 ### 複数パッケージの横断（1 回の実行に unitypackage が 2 つ以上あるとき）
 
@@ -168,7 +195,7 @@ VRCFury https://vcc.vrcfury.com 、VRChat SDK（VCC） https://vcc.docs.vrchat.c
 | X03 | 黄 | 同じ `pathname` で GUID が違う | 別のアセットとして別名で入る可能性（Unity の実際の動作は未検証） |
 | X04 | 緑 | 全パッケージに共通のアセット数と、パッケージごとにしか無いアセット数 | 対応アバター別の差分を把握する |
 
-既知アセットの GUID は X01〜X03 の対象外（P04〜P07 で扱う）。
+既知アセットの GUID は X01〜X03 の対象外（P04〜P07 で扱う）。フォルダのエントリも X01〜X03 の対象外（中身が無く、フォルダの GUID は書き出し元のプロジェクトごとに違うのが普通）。
 
 ### zip 単位
 
@@ -218,18 +245,18 @@ Outfit_v1.0.zip
 Enter キーを押すと閉じます…
 ```
 
-- 並び順: 赤 → 黄 → 緑。同じ重さの中はコード順。
+- 並び順: 赤 → 黄 → 緑。同じ重さの中はコードの文字列順（P → X → Z、番号順）。
 - 各項目は「何が」「→ なぜ・どうする」を必ず持つ。画面では例を最大 3 件、レポートでは全件。
 - 表示はプレーンテキスト（色は付けない。exe のコンソールで確実に読めるため）。
 - `--verbose` でレポートと同じ全件を画面にも出す。
 
 ### レポート（report.txt）
 
-- 保存先: `ドキュメント\UpkgPrecheck\<最初の入力のファイル名（拡張子なし）>-YYYYMMDD-HHMMSS\report.txt`（`--out DIR` で親フォルダを変更、`--no-report` で保存しない）。
+- 保存先: `ドキュメント\UpkgPrecheck\<最初の入力の名前（ファイルは拡張子なし、フォルダはフォルダ名）>-YYYYMMDD-HHMMSS\report.txt`（`--out DIR` で親フォルダを変更、`--no-report` で保存しない）。
   入力ファイルの隣には保存しない（zip を作り直すときに一緒に入ってしまうのを防ぐため）。
   ドキュメントフォルダは `Path.home() / "Documents"`、無ければカレントディレクトリ。
 - UTF-8（BOM 付き。メモ帳で文字化けしないため）。
-- 内容: ツールのバージョン、辞書の日付、実行日時、入力ファイル名（**ファイル名のみ。フルパスは書かない**）・サイズ・SHA-256、結果の件数、全項目（例は全件）、
+- 内容: ツールのバージョン、辞書の日付、実行日時、入力ファイル名（**ファイル名のみ。フルパスは書かない**。フォルダ入力は中の各ファイル）・サイズ・SHA-256、結果の件数、全項目（例は全件）、
   パッケージごとの同梱物集計（種類別件数・サイズ・`Assets/` 直下フォルダ）、外部参照の一覧（GUID・分類・参照元）、既知アセットの検出一覧。
 
 ### 説明書の下書き（readme-draft.md）
@@ -242,14 +269,15 @@ Enter キーを押すと閉じます…
 > この下書きは出品前チェッカーが unitypackage の中身から作りました。内容を確認して書き直してから使ってください。
 
 ## 導入に必要なもの
-- VRChat Creator Companion（VCC）で作ったアバター用プロジェクト（VRChat SDK - Avatars）  ← DLL の部品か vrchat-sdk を参照しているとき
+- VRChat Creator Companion（VCC）で作ったアバター用プロジェクト（VRChat SDK - Avatars）  ← vrchat-sdk の GUID かパスを参照しているとき
 - lilToon: https://booth.pm/ja/items/3087170 （公式は VCC からの導入を推奨しています）  ← 検出したものだけ、下の固定順で
 - Modular Avatar: https://modular-avatar.nadena.dev/ （NDMF も一緒に入ります）
 
 ## 導入手順
 1. 「導入に必要なもの」を先に入れてください（シェーダー → ツールの順）。
-2. お使いのアバターに対応した unitypackage をインポートしてください。
-3. （ここに着せ方を書いてください）
+2. （P23 があるとき）先に共通のパッケージ（○○.unitypackage）をインポートしてください。
+3. お使いのアバターに対応した unitypackage をインポートしてください。
+4. （ここに着せ方を書いてください）
 
 ## 同梱物
 | ファイル | 内容 |
@@ -330,12 +358,13 @@ Enter キーを押すと閉じます…
 ## 既知の制限・未検証事項
 
 - **黄の「入れ忘れ候補」が本当に入れ忘れかは確定できない。** Unity の標準パッケージ（`com.unity.*`）や、購入者の環境にある他のアセットを参照している場合も黄になる。Unity で読み込まないと確定できない。
-- **VRChat SDK の部品は GUID で判別していない。** SDK を取得できないため（packages.vrchat.com が egress ブロック）。DLL 内の部品として緑で数える。SDK が `.cs` のスクリプトを持つ部品を参照している場合は黄になる（誤検知）。利用者の報告で直す。
+- **VRChat SDK の判別はアバター向け SDK3 の DLL 6 個だけ。** SDK 本体を取得できないため（packages.vrchat.com が egress ブロック）、GUID は 2 つの二次情報源の一致で決めた。ワールド向け SDK の DLL、SDK に含まれる `.cs` の部品への参照は「不明な DLL 内の部品」または黄になる。利用者の報告で辞書に足す。
+- **本物の書き出しで確認したのは lilToon 1.7.0 の unitypackage 1 個。** `./` 接頭辞付きの書き出し、`.icon.png` 付きの書き出し、pathname に 2 行目がある書き出しは、他ツールのコードから形式を取り込んだだけで実物は未確認。
 - **実際の Booth 商品で試していない。** 誤検知の率は未検証。期間限定無料の間に報告を集める。
 - 複数パッケージの GUID 衝突（X02・X03）で Unity が実際にどう振る舞うかは未検証。
 - バイナリ形式のアセット・FBX の中身・テクスチャの中身は調べない（参照を持たない、または読めない）。
 - preview.png は読まない（見た目の偽装は検出しない）。
-- Poiyomi の「ロック」で作られた最適化シェーダーをパッケージに入れた場合の扱い（自作扱いになる）が正しいかは未確認。
+- Poiyomi の「ロック」で作られた最適化シェーダーは、配布元のフォルダの下に生成されるため P22（黄）になる想定。生成先のフォルダ名の実値は未確認。
 - 既知アセット辞書は作成日時点。新しい版で増えたファイルは GUID で判別できず、パス接頭辞だけで判定する（VCC で入れた `Packages/` の場合は判別できる。`Assets/` の下に置き直したものは判別できない）。
 - Windows の SmartScreen が初回起動時に警告を出すことがある（既存商品と同じ）。
 
@@ -355,6 +384,9 @@ Enter キーを押すと閉じます…
 - Asset Serialization Mode の既定: https://github.com/JetBrains/resharper-unity/wiki/Asset-serialization-mode
 - パス長（150 文字未満）: https://assetstore.unity.com/publishing/submission-guidelines
 - pathname の攻撃: https://github.com/Cobertos/unitypackage_extractor/issues/14
+- 本物の書き出し（形式確認用）: https://github.com/lilxyzw/lilToon/releases/download/1.7.0/lilToon_1.7.0.unitypackage （MIT）
+- `./` 接頭辞と `.icon.png`: https://gist.github.com/yasirkula/dfc43134fbfefb820d0adbc5d7c25fb3 , https://github.com/foxscore/add-icon-to-unitypackage
+- VRChat SDK の DLL GUID（二次情報源）: https://github.com/CMoyuer/VRChatAvatarSDK3Container
 - Unity パッケージのマルウェア例: https://github.com/advisories/GHSA-xq92-f676-63w4
 - lilToon: https://github.com/lilxyzw/lilToon （Document ブランチ `docs/ja_JP/first.md`、MIT）
 - Poiyomi: https://github.com/poiyomi/PoiyomiToonShader （README、MIT）

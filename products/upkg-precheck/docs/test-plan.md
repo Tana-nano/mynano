@@ -33,6 +33,9 @@
 | U08 | GUID でない名前、pathname 無し、meta の guid 不一致、`Assets/` 以外で始まる | P14 用の異常 |
 | U09 | `--max-text-mb` を超えるテキスト | 参照を抽出せず P13 用の印、SHA-256 は計算済み |
 | U10 | ディスクに何も書かない | 実行前後で一時ディレクトリが空のまま |
+| U11 | メンバー名に `./` 接頭辞、ディレクトリのメンバー、ルート直下の `.icon.png` | 接頭辞を除いて同じ結果。ディレクトリと `.icon.png` は無視され P14 にならない |
+| U12 | pathname の末尾に改行、2 行目に `00` | 1 行目だけ（改行なし）になる |
+| U13 | フォルダのエントリ（`asset` 無し、`folderAsset: yes`、pathname 末尾 `/` なし） | フォルダ判定。X01〜X03・P15〜P17 の対象外 |
 
 ### 参照抽出（`refs` モジュール）
 | # | 入力 | 期待 |
@@ -51,6 +54,8 @@
 | C01 | 同じ実行の別パッケージにある GUID | 内部 |
 | C02 | `0000000000000000e000000000000000` / `...f000...` | 組み込み |
 | C03 | 辞書の lilToon シェーダー GUID | 既知（liltoon） |
+| C03b | `m_Script` で fileID `-1427037861`、GUID `4ecd63eff847044b68db9453ce219299`（VRChat SDK の DLL） | 既知（vrchat-sdk）。DLL 判定より辞書が優先 |
+| C09 | 参照先が同じ実行の**別の**パッケージにだけある | 同梱の別パッケージ（P23 用） |
 | C04 | `m_Script` で fileID が `11500000` 以外、GUID 不明 | DLL 内の部品 |
 | C05 | `m_Script`、fileID `11500000`、GUID 不明 | 見つからないスクリプト |
 | C06 | `m_Shader`、GUID 不明 | 見つからないシェーダー |
@@ -73,6 +78,10 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 |---|---|---|
 | T-P04 | 自作 prefab ＋ lilToon のファイル 3 個 | P04（赤、liltoon、件数 3）。案内文に「非推奨」 |
 | T-P04n | 自作のみ、lilToon は参照だけ | P04 なし、P19 に liltoon |
+| T-P22 | GUID は辞書に無く pathname が `Assets/_PoiyomiShaders/OptimizedShaders/x.shader` | P22（黄）。P04 なし |
+| T-P23 | パッケージ A の mat がパッケージ B のテクスチャを参照 | P23（黄）。P11 なし。下書きの導入手順に共通パッケージの行 |
+| T-P09k | 辞書の GUID を持つ `.cs`（配布元そのまま）＋自作 prefab | P09 なし（P04 は出る）。パス接頭辞だけの `.cs` なら P09 |
+| T-P08k | 既知アセットのパス接頭辞の下の `.exe` | P08（赤）は出る |
 | T-P05 | vrcfury のファイルだけのパッケージ | P05（赤） |
 | T-P06 | modular-avatar だけのパッケージ | P06（黄） |
 | T-P07 | liltoon だけのパッケージ | P07（緑）。P04 なし |
@@ -83,16 +92,17 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 | T-P11n | 参照先が別パッケージにある | P11 なし（C01） |
 | T-P12/P13/P14 | 読み取り側の印 | 各コード |
 | T-P15 | 151 文字の pathname / 150 文字 | 151 で P15、150 で出ない。`max_path` で変えられる |
-| T-P16 | `Assets/A/x.png` と `Assets/a/X.png` | P16 |
+| T-P16 | `Assets/A/x.png` と `Assets/a/X.png` / `Assets/A/con.png` / `Assets/A/x. ` / `Assets/A/a:b.png` | それぞれ P16。既知アセットのエントリなら出ない |
 | T-P17 | `Assets/readme.txt`、`Assets/A/`＋`Assets/B/` | P17。`Assets/A/` と `Assets/lilToon/`（既知）だけなら出ない |
 | T-P18 | 中に `.zip` | P18 |
 | T-P19 | lilToon と MA を参照 | P19 に固定順で liltoon, modular-avatar |
-| T-P20 | DLL 内の部品の参照 | P20（緑） |
+| T-P20 | 辞書に無い GUID への DLL 内の部品の参照 | P20（緑）。VRChat SDK の GUID なら P20 ではなく P19 に vrchat-sdk |
 | T-P21 | 種類別件数 | prefab / マテリアル / テクスチャ / メッシュ / アニメーション / スクリプト / その他が正しい |
 | T-X01 | 2 パッケージで同 GUID・別内容 | X01（赤） |
 | T-X01n | 同 GUID・同内容 | X01 なし、X04 の共通に数える |
 | T-X02/X03 | 同 GUID・別パス / 同パス・別 GUID | X02 / X03（黄） |
 | T-X-known | 既知アセットの GUID が 2 パッケージにある | X01〜X03 に出さない |
+| T-X-folder | 同じ pathname のフォルダが別 GUID で 2 パッケージにある | X03 に出さない |
 | T-order | 赤・黄・緑が混ざる | 赤 → 黄 → 緑、同じ重さはコード順 |
 
 ### zip（`archive` モジュール）
@@ -149,6 +159,13 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 
 実データでの確認（開発時に 1 回、手順を `tools/README.md` に書く）: 各リポジトリを取得して辞書を作り、件数が
 lilToon ≥ 400、Modular Avatar ≥ 900、Poiyomi ≥ 1,200、NDMF ≥ 400、VRCFury ≥ 700（2026-09-30 時点の最新版の `.meta` 数）であることを確かめる。
+
+## 本物の書き出しでの確認（任意。CI では走らない）
+
+環境変数 `UPKG_REAL_FIXTURE_DIR` にフォルダを指定したときだけ走るテストを 1 つ置く（無ければ skip）。
+フォルダに `lilToon_1.7.0.unitypackage`（https://github.com/lilxyzw/lilToon/releases/download/1.7.0/lilToon_1.7.0.unitypackage 、MIT。リポジトリには入れない）があれば:
+- P01〜P03・P14 が出ない、P07（liltoon 単独）が出る、P04・P22 が出ない、エントリ数 370、フォルダ 18。
+- 開発時に 1 回実行し、結果を `tools/README.md` に日付付きで書く。
 
 ## Windows ビルド
 
