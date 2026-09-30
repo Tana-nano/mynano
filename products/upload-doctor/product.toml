@@ -1,0 +1,24 @@
+# 商品メタデータ。scripts/package.py と scripts/release_check.py がこのファイルを読む。
+
+[product]
+name = "upload-doctor"
+display_name = "アップロードドクター for VRChat"
+version = "0.1.0"              # SemVer。出品ごとに上げる
+kind = "pc-app"                # pc-app | blender-addon | seller-tool | other
+price_jpy = 0                  # 無料（ブースト任意）。仮置き: 企画の論点 1 で確認中。根拠: docs/market/system-tool-candidates-2-2026-09.md
+entry = "src/upload_doctor/__main__.py"
+package = "upload_doctor"
+
+[support]
+pc_vr = true
+desktop = true
+quest_standalone = false       # PC アプリは必ず false。README/商品説明に明記される
+windows_min = "10"
+requires = ["Unity プロジェクトフォルダ（VRChat SDK 導入済み or 導入途中）"]
+
+[deps]
+# 標準ライブラリのみで作る方針（企画書 Step 2）。追加する場合はここにライセンスと共に列挙する。
+
+[dist]
+include = ["README.md", "EULA.md", "CHANGELOG.md", "src/", "requirements.txt"]
+exclude = ["tests/", "docs/", "dist/", "__pycache__/"]
