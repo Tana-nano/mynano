@@ -196,7 +196,7 @@ Enter 待ちは、`--` で始まるオプションが 1 つも無く、かつ `-
 | P_VPM_NO_MANIFEST | `vpm-manifest.json` が無く、`Packages/com.vrchat.*` はある | info | VCC 管理外のプロジェクト |
 | P_VPM_MISSING_PACKAGE | manifest の `locked`（無ければ `dependencies`）にある ID の `Packages/<id>/` が無い。**欠けているのが `com.vrchat.*` なら ng**、それ以外は warn | warn(ng) / mid | VCC で「Resolve」または開き直し（リゾルバは欠落パッケージを復元する、と VCC ドキュメントの要約） |
 | P_VPM_VERSION_DRIFT | `locked` のバージョンと `Packages/<id>/package.json` の `version` が違う | warn / low | 同上 |
-| P_VPM_DEP_UNSATISFIED | あるパッケージの `vpmDependencies` の ID が `Packages/` に無い | warn / mid | 依存パッケージを VCC で追加。バージョン範囲は `x` ワイルドカード（例 `3.1.x`）・完全一致・`>=` だけ判定し、それ以外は判定しない（範囲の書式は VCC 資料の要約で**未確認**） |
+| P_VPM_DEP_UNSATISFIED | あるパッケージの `vpmDependencies` の ID が `Packages/` に無い、または版が範囲外 | warn / mid | 依存パッケージを VCC で追加・更新。範囲は `x` ワイルドカード（`3.1.x`, `3.x.x`）と、空白区切りの比較条件（`>=` `<=` `>` `<` `=`、例 `>=3.7.0 <3.11.0`）を判定する。`||` `^` `~` などは判定しない。境界と同じ数字のプレリリース版も判定しない |
 | P_SDK_DUPLICATE | `Assets/VRCSDK` があり、かつ `Packages/com.vrchat.base` もある | warn / mid | 旧方式の SDK と VCC 方式の SDK が二重に入っている可能性。バックアップを取り、VCC 方式に統一（公式は VCC を推奨。sdk/index.md） |
 | P_DEFINE_SYMBOLS | `VRC_SDK_VRCSDK2` の語が `ProjectSettings.asset` にあり、SDK3 相当（`Packages/com.vrchat.avatars` か `worlds`）が入っている | warn / mid | SDK2 のシンボルが残っている。公式: 「そのプロジェクトの SDK に関係ないシンボルは消す」（sdk-troubleshooting.md）。Unity の Player Settings → Scripting Define Symbols から消す |
 | P_SDK_OLD | 導入済み `com.vrchat.avatars` の版が規則表 `sdk.min_avatars_for_new_upload` 未満 | warn / low | SDK 3.9.0 未満だと新規アバターのアップロードができない、という案内が解説記事にある。VCC で最新版に更新（バックアップ後） |
@@ -279,6 +279,20 @@ CLI オプション（上表）と規則表 `rules.json` が全て。設定フ�
 - `pyinstaller.args`: `--collect-submodules upload_doctor --collect-data upload_doctor`（`rules.json` を exe に同梱するため）。
 - `smoke.args`: `--no-pause --no-report`（CI にはプロジェクトも Editor.log も無いので「プロジェクトのフォルダでない」で終了コード 2 になってしまう）。そのため **`--self-check` を追加する**: 同梱の `rules.json` を読み込んで検証し、内蔵の最小の偽プロジェクトを一時フォルダ（`tempfile`、終了時に削除）に作って診断まで通し、終了コード 0 を返す。**これが「レポート以外に書かない」の唯一の例外**で、書く先は一時フォルダだけ。`smoke.args` は `--self-check --no-pause`。CI の合格は 0 または 1（既存の仕組みどおり）。
   - `--self-check` は隠しオプション（README には書かない。サポート用に `--version` と並べて残すのは可）。
+
+## 実物での確認（2026-09-30、出品前）
+
+Windows 実機と VRChat アカウントの無い環境で、次の方法で「実物」と突き合わせた。
+
+| 確認したもの | 方法 | 結果 |
+|---|---|---|
+| Unity 2022.3.22f1 本体のログ | Docker イメージ `unityci/editor:ubuntu-2022.3.22f1-base-3`（game-ci）でバッチモード起動 | ライセンス未認証のため**プロジェクト読み込み前に終了**。先頭のログ（`[Licensing::…] Error: …` を含む）で誤検知なし。この時点までにコマンドライン引数は出力されない（`-projectPath` の判定は「不明」になる） |
+| コンパイルエラーの行の形と文言 | 同イメージ同梱の C# コンパイラで、壊れたスクリプトを `Assets/...` の相対パスでコンパイル | 正規表現で全行を解析できた。**名前空間ごと無い場合、不足名は先頭の 1 語だけ**（例 `'nadena'`、`'VRC'`）→ Modular Avatar のヒントに `nadena` の完全一致を追加 |
+| `ProjectSettings.asset` | 同イメージ内の Unity 標準テンプレート | テキスト形式（`%YAML 1.1`）。`scriptingDefineSymbols` の項目がある → 語の検索で読める |
+| `ProjectVersion.txt`, `vpm-manifest.json` | VRChat 公式のアバター用テンプレート（GitHub） | `m_EditorVersion: 2022.3.22f1` の形を確認。`vpm-manifest.json` は `dependencies.<id>.version`、版は `3.x.x`。**`locked` の実物は未確認** |
+| パッケージの `vpmDependencies` | Modular Avatar・NDMF・Avatar Optimizer の `package.json`（GitHub） | 範囲は `>=1.14.7 <2.0.0-a`、`>=3.7.0 <3.11.0` のように**空白区切りの複数条件**が使われていた → 複数条件と `3.x.x` に対応。`||` などは判定しない |
+
+まだ確かめられていないもの: Windows で GUI 起動したときの Editor.log の全体（コマンドライン引数の有無、コンパイルエラーがそのまま書かれるか、アップロード失敗の文言）、`vpm-manifest.json` の `locked`、Windows 上での exe の動作。
 
 ## 実装時の決定（2026-09-30）
 

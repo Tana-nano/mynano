@@ -20,5 +20,5 @@ requires = ["Unity プロジェクトフォルダ（VRChat SDK 導入済み or �
 # 標準ライブラリのみで作る方針（企画書 Step 2）。追加する場合はここにライセンスと共に列挙する。
 
 [dist]
-include = ["README.md", "EULA.md", "CHANGELOG.md", "src/", "requirements.txt"]
+include = ["README.md", "EULA.md", "CHANGELOG.md", "THIRD_PARTY.md", "src/", "requirements.txt"]
 exclude = ["tests/", "docs/", "dist/", "__pycache__/"]

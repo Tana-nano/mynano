@@ -95,12 +95,22 @@ def test_versions():
     assert compare((3, 9), (3, 9, 0)) == 0
     assert satisfies("3.1.4", "3.1.x") is True
     assert satisfies("3.2.0", "3.1.x") is False
+    assert satisfies("3.10.1", "3.x.x") is True  # the official avatar template writes this
+    assert satisfies("4.0.0", "3.x.x") is False
     assert satisfies("3.1.4", "3.1.4") is True
     assert satisfies("3.1.5", "3.1.4") is False
     assert satisfies("3.2.0", ">=3.1.0") is True
     assert satisfies("3.0.9", ">= 3.1.0") is False
     assert satisfies("3.1.4", "^3.1.0") is None
-    assert satisfies("3.1.4", ">=3.1.0 <4.0.0") is None
+    # Real ranges from GitHub package.json files (Modular Avatar, Avatar Optimizer)
+    assert satisfies("1.14.8", ">=1.14.7 <2.0.0-a") is True
+    assert satisfies("2.1.0", ">=1.14.7 <2.0.0-a") is False
+    assert satisfies("3.10.1", ">=3.7.0 <3.11.0") is True
+    assert satisfies("3.11.0", ">=3.7.0 <3.11.0") is False
+    assert satisfies("3.6.2", ">=3.7.0 <3.11.0") is False
+    assert satisfies("2.0.0-beta.1", ">=1.14.7 <2.0.0-a") is None  # pre-release at the bound: not judged
+    assert satisfies("3.1.4", ">=3.0.0 || <2.0.0") is None
+    assert satisfies("3.1.4", "~3.1.0") is None
     assert satisfies(None, "3.1.x") is None
     assert unity_major_minor("2022.3.22f1") == "2022.3"
     assert unity_major_minor("6000.0.23f1") == "6000.0"

@@ -1,0 +1,4 @@
+Assets/Fixture Folder (1)/Menu.cs(1,7): error CS0246: The type or namespace name 'nadena' could not be found (are you missing a using directive or an assembly reference?)
+Assets/Fixture Folder (1)/Menu.cs(2,7): error CS0246: The type or namespace name 'VRC' could not be found (are you missing a using directive or an assembly reference?)
+Assets/VRCSDK/SDK3/Runtime/Filter.cs(1,23): error CS0246: The type or namespace name 'Cinemachine' could not be found (are you missing a using directive or an assembly reference?)
+Assets/FixtureShop/Scripts/FixtureBone.cs(4,12): error CS0246: The type or namespace name 'DynamicBone' could not be found (are you missing a using directive or an assembly reference?)

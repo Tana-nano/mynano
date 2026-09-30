@@ -92,10 +92,12 @@ def test_dependencies(tmp_path):
         "com.vrchat.avatars": ("3.2.0", {"com.vrchat.base": "3.1.x"}),
         "com.foo": ("1.0.0", {"com.bar": "1.0.0", "com.vrchat.base": "^3.0.0"}),
         "com.ok": ("1.0.0", {"com.vrchat.base": ">=3.1.0"}),
+        "com.anatawa12.avatar-optimizer": ("1.9.19", {"com.vrchat.avatars": ">=3.7.0 <3.11.0"}),
     }
     f = ids(run(make_project(tmp_path / "p", packages=pk)))["P_VPM_DEP_UNSATISFIED"]
     assert (f.level, f.confidence) == (WARN, "mid")
     assert f.evidence == [
+        "com.anatawa12.avatar-optimizer は com.vrchat.avatars >=3.7.0 <3.11.0 が必要ですが、3.2.0 です",
         "com.foo は com.bar 1.0.0 が必要ですが、入っていません",
         "com.vrchat.avatars は com.vrchat.base 3.1.x が必要ですが、3.2.0 です",
     ]
@@ -239,3 +241,13 @@ def test_summary_and_exit_code():
     assert checks.summary([Finding("B", WARN, "b")]) == "結果: 注意 1 件"
     assert checks.exit_code([Finding("B", WARN, "b")]) == 0
     assert checks.exit_code([Finding("A", NG, "a")]) == 1
+
+
+def test_real_range_sdk_too_new(tmp_path):
+    pk = {
+        "com.vrchat.base": "3.11.0",
+        "com.vrchat.avatars": "3.11.0",
+        "com.anatawa12.avatar-optimizer": ("1.9.19", {"com.vrchat.avatars": ">=3.7.0 <3.11.0"}),
+    }
+    f = ids(run(make_project(tmp_path / "p", packages=pk)))["P_VPM_DEP_UNSATISFIED"]
+    assert f.evidence == ["com.anatawa12.avatar-optimizer は com.vrchat.avatars >=3.7.0 <3.11.0 が必要ですが、3.11.0 です"]

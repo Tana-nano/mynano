@@ -2,7 +2,9 @@
   "schema": 1,
   "checked_on": "2026-09-30",
   "unity": {
-    "supported": ["2022.3.22f1"],
+    "supported": [
+      "2022.3.22f1"
+    ],
     "source": "https://raw.githubusercontent.com/vrchat-community/creator-docs/main/Docs/docs/sdk/upgrade/current-unity-version.md"
   },
   "sdk": {
@@ -34,7 +36,9 @@
       "level": "warn",
       "confidence": "low",
       "title": "アバターのビルドに失敗した記録があります",
-      "advice": ["この行より前にある赤いエラーを確認してください。原因は別の行にあることが多いです"],
+      "advice": [
+        "この行より前にある赤いエラーを確認してください。原因は別の行にあることが多いです"
+      ],
       "source": "https://ask.vrchat.com/t/error-building-avatar-2022-3-6f1/22003"
     },
     {
@@ -43,7 +47,9 @@
       "level": "warn",
       "confidence": "low",
       "title": "アバターの検証（validation）に失敗した記録があります",
-      "advice": ["Unity の VRChat SDK パネル（Builder 画面）に出ている警告を確認してください"],
+      "advice": [
+        "Unity の VRChat SDK パネル（Builder 画面）に出ている警告を確認してください"
+      ],
       "source": "https://ask.vrchat.com/t/avatar-validation-failed/25422"
     },
     {
@@ -74,38 +80,61 @@
   ],
   "missing_type_hints": [
     {
-      "match": ["DynamicBone"],
+      "match": [
+        "DynamicBone"
+      ],
       "hint": "Dynamic Bone（有料アセット）を参照するスクリプトが残っています。Dynamic Bone を入れるか、参照しているスクリプトを削除",
       "confidence": "low",
       "source": "https://koshishirai.com/en/unity-vrchat-avatar-upload-solution/"
     },
     {
-      "match": ["VRCFury"],
+      "match": [
+        "VRCFury"
+      ],
       "hint": "VRCFury が入っていません。商品の導入手順に従って VCC で追加",
       "confidence": "low",
       "source": "https://vrnavi.jp/vcc-tools-introduction/"
     },
     {
-      "match": ["VRC.", "VRC_", "VRCSDK", "VRCAvatar", "VRCExpression"],
-      "exact": ["VRC"],
+      "match": [
+        "VRC.",
+        "VRC_",
+        "VRCSDK",
+        "VRCAvatar",
+        "VRCExpression"
+      ],
+      "exact": [
+        "VRC"
+      ],
       "hint": "VRChat SDK の型です。SDK が入っていないか壊れています。VCC で SDK を入れ直す",
       "confidence": "low",
       "source": "https://raw.githubusercontent.com/vrchat-community/creator-docs/main/Docs/docs/sdk/sdk-troubleshooting.md"
     },
     {
-      "match": ["nadena.dev", "ModularAvatar"],
+      "match": [
+        "nadena.dev",
+        "ModularAvatar"
+      ],
       "hint": "Modular Avatar（または NDMF）が入っていません。商品の導入手順に従って VCC で追加",
       "confidence": "low",
-      "source": "https://vrnavi.jp/vcc-tools-introduction/"
+      "source": "https://vrnavi.jp/vcc-tools-introduction/",
+      "exact": [
+        "nadena"
+      ]
     },
     {
-      "match": ["lilToon"],
+      "match": [
+        "lilToon"
+      ],
       "hint": "lilToon が入っていないか、バージョンが合っていません。商品の指定するバージョンを入れる",
       "confidence": "low",
       "source": "https://vrnavi.jp/vcc-tools-introduction/"
     },
     {
-      "match": ["Cinemachine", "Unity.Cinemachine"],
+      "match": [
+        "Cinemachine",
+        "Unity.Cinemachine"
+      ],
       "hint": "Unity のパッケージ Cinemachine（com.unity.cinemachine）がありません。Unity の Package Manager で追加",
       "confidence": "low",
       "source": "https://ask.vrchat.com/t/errors-in-unity-sdk/12433"
