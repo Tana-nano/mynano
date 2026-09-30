@@ -7,7 +7,7 @@
 
 バイナリのフィクスチャはリポジトリに置かず、テスト内で組み立てる。
 
-- `tests/builders.py`
+- `tests/up_builders.py`（他の商品の `helpers.py` と名前がぶつからないよう接頭辞を付ける。共通の呼び出しは `tests/up_helpers.py`）
   - `make_unitypackage(entries, *, extra_members=None) -> bytes`: `entries` は `(guid, pathname, asset_bytes | None, meta_text)` の列。
     `tarfile` + `gzip` でメモリ上に作る。`asset_bytes=None` はフォルダ。`extra_members` で異常なメンバー（シンボリックリンク、GUID でない名前、pathname 無し）を足せる。
   - `meta(guid, refs=())`: `.meta` のテキスト（`fileFormatVersion: 2` / `guid: ...` と、任意の参照行）。
@@ -78,13 +78,13 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 |---|---|---|
 | T-P04 | 自作 prefab ＋ lilToon のファイル 3 個 | P04（赤、liltoon、件数 3）。案内文に「非推奨」 |
 | T-P04n | 自作のみ、lilToon は参照だけ | P04 なし、P19 に liltoon |
-| T-P22 | GUID は辞書に無く pathname が `Assets/_PoiyomiShaders/OptimizedShaders/x.shader` | P22（黄）。P04 なし |
+| T-P22 | 自作 prefab ＋ GUID は辞書に無く pathname が `Assets/_PoiyomiShaders/OptimizedShaders/x.shader` | P22（黄）。P04 なし |
 | T-P23 | パッケージ A の mat がパッケージ B のテクスチャを参照 | P23（黄）。P11 なし。下書きの導入手順に共通パッケージの行 |
 | T-P09k | 辞書の GUID を持つ `.cs`（配布元そのまま）＋自作 prefab | P09 なし（P04 は出る）。パス接頭辞だけの `.cs` なら P09 |
 | T-P08k | 既知アセットのパス接頭辞の下の `.exe` | P08（赤）は出る |
 | T-P05 | vrcfury のファイルだけのパッケージ | P05（赤） |
-| T-P06 | modular-avatar だけのパッケージ | P06（黄） |
-| T-P07 | liltoon だけのパッケージ | P07（緑）。P04 なし |
+| T-P06 | modular-avatar と ndmf だけのパッケージ | P06（黄）が 2 件、P04 なし |
+| T-P07 | liltoon だけのパッケージ（辞書に無い新しいファイルを 1 個含む） | P07（緑）。P04・P22 なし |
 | T-P08 | `.exe` を含む | P08（赤）。`allow_exe=True` で黄 |
 | T-P09/P10 | `.cs` に `[InitializeOnLoad]` | P09 と P10（黄） |
 | T-P10n | `.cs` にそれらの語が無い | P09 のみ |
@@ -120,6 +120,7 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 | A10 | `__MACOSX/x`、`Thumbs.db` | Z09（緑） |
 | A11 | zip 内の `.exe` | Z08（赤）。`allow_exe` で黄 |
 | A12 | 暗号化メンバー（ZipInfo のフラグ bit 0 を立てたもの） | Z06 |
+| A12b | Deflate64（圧縮方式 9）の unitypackage と zip | Z06。Z01 にはしない。他のパッケージは調べる |
 
 ### 出力（`report` / `draft` モジュール）
 | # | 状況 | 期待 |
@@ -158,7 +159,7 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 | D03 | `.meta` に guid 行が無い | 飛ばして警告 |
 
 実データでの確認（開発時に 1 回、手順を `tools/README.md` に書く）: 各リポジトリを取得して辞書を作り、件数が
-lilToon ≥ 400、Modular Avatar ≥ 900、Poiyomi ≥ 1,200、NDMF ≥ 400、VRCFury ≥ 700（2026-09-30 時点の最新版の `.meta` 数）であることを確かめる。
+lilToon ≥ 400、Modular Avatar ≥ 400、Poiyomi ≥ 1,500、NDMF ≥ 280、VRCFury ≥ 700 であることを確かめる（K05 でも同じ下限を確かめる。Unity が無視する `UnitTests~` などを除いた数。2026-09-30 の結果は `tools/README.md`）。
 
 ## 本物の書き出しでの確認（任意。CI では走らない）
 
