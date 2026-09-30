@@ -79,6 +79,25 @@ python scripts/package.py <name>       # products/<name>/dist/<name>-<version>.z
 python scripts/release_check.py <name> # 出品前チェック
 ```
 
+## 運用メモ（これまでの商品で分かったこと）
+
+- **Windows ビルドの起動**: タグは push できないセッションがあるため、コミットメッセージに `[build:<name>]` を
+  入れて作業ブランチに push するとビルドされる。成果物は Actions の artifact（`<name>-<version>-win64`）。
+  `products/<name>/smoke.args` があれば、exe をその引数で 1 回実行し、終了コード 0 か 1 なら合格。
+  `pyinstaller.args` で `--collect-submodules` などを追加できる。
+- **Windows ビルドのログで日本語が「?」になる**のはランナーのコードページのせい。exe の不具合ではない。
+- **UDP ポートの横取りに注意**: Windows では、他アプリが 0.0.0.0 で持つポートにも 127.0.0.1 で bind が
+  成功してしまい、通信を奪うことがある。待ち受けは `SO_EXCLUSIVEADDRUSE` を付け、空き判定は 0.0.0.0 に
+  排他 bind して確かめる（実装例: `products/vsui-log/src/vsui_log/oscio.py`）。実機での効果は未検証。
+- **VRChat の OSC 受信ポートは 9000 とは限らない**: 空いていないと別のポートを使う。OSCQuery の
+  HOST_INFO の `OSC_PORT` を優先して確認する（実装例: `products/osc-doctor`）。
+- **ブロックされるサイト**: booth.pm と feedback.vrchat.com は直接取得できないことがある。検索結果の要約で
+  代用した場合は、そのことを調査ノートに書く。
+- **既存商品**: `vsui-log`（V睡ログ、有料）、`osc-doctor`（OSCドクター、無料・ショップの入口）。
+  新商品の booth.md の「同じ作者のツール」に並べ、既存商品の booth.md にも追記して相互に紹介する。
+- **並行セッション**: 別セッションで別商品を作るときは、`shared/`・`scripts/`・`.github/`・このファイルの
+  変更は小さく分けて早めに master へ取り込み、衝突を避ける。商品フォルダの中は自由に変えてよい。
+
 ## 文体
 
 - ユーザー向け文書（README、商品説明）は日本語。丁寧語、専門用語には一言説明を添える。
