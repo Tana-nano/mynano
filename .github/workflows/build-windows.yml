@@ -93,6 +93,12 @@ jobs:
           for f in THIRD_PARTY.md GIMMICK_SPEC.md; do [ -f "$f" ] && cp "$f" "$out/"; done
           # Smoke test: the frozen exe must at least start and print its version.
           "$out/$name.exe" --version
+          # Optional deeper smoke run (e.g. a full diagnosis without VRChat): exit 0 or 1 passes.
+          if [ -f smoke.args ]; then
+            set +e; "$out/$name.exe" $(cat smoke.args); rc=$?; set -e
+            echo "smoke exit code: $rc"
+            [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ]
+          fi
           cd dist && 7z a -tzip "$name-$ver-win64.zip" "$name-$ver-win64" > /dev/null
           ls -la
 

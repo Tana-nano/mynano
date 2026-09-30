@@ -14,11 +14,12 @@ Everything here runs on Linux with no VRChat, Unity or SteamVR.
 
 from .log import LogWriter, format_line, join_lines, player_joined, player_left, left_room
 from .osc import FakeVRChat, OscRecorder, free_udp_port
-from .oscquery import OscQueryProbe, ProbeResult
+from .oscquery import FakeVRChatQuery, OscQueryProbe, ProbeResult
 
 __all__ = [
     "FakeVRChat",
     "OscRecorder",
+    "FakeVRChatQuery",
     "OscQueryProbe",
     "ProbeResult",
     "free_udp_port",
