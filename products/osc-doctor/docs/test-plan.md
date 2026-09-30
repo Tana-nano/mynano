@@ -22,7 +22,9 @@
 | 対象 | ケース |
 |---|---|
 | 起動引数の解析 | `--osc=9000:127.0.0.1:9001`／`--osc=9100:127.0.0.1:9101`／引数なし／壊れた値（無視）／他の引数と混在 |
-| 判定 `judge` | 判定表の各行を 1 ケース以上。特に: VRChat 無し → RX/OQ/TRACKING を出さない／IN_PORT_FREE／RX_NONE_OQ／RX_ONLY_FIXED／TRACKING_MISSING は VRMode=0 で出ず TRACKING_DESKTOP／VRMode 不明なら TRACKING_MISSING／CACHE の `--fix-cache` 併記条件／OSC_PORT と in-port の不一致で情報 |
+| 「VRChat の受信ポート」の決定 | HOST_INFO > `--in-port` > 起動引数 > 9000 の優先順／食い違いで情報 |
+| 判定 `judge` | 判定表の各行を 1 ケース以上。特に: VRChat 無し → RX/OQ/TRACKING/IN_PORT を出さない／IN_PORT_FREE は OQ 未発見のときだけ、OQ 発見なら IN_PORT_STALE／IN_PORT_ROUTED／OQ_FOUND_DIRECT／RX_NONE_OQ／RX_ONLY_FIXED／TRACKING は OSCQuery 経由の受信が無ければ一切出さない／VRMode=0 → DESKTOP／VRMode=1 または vrserver.exe → MISSING／どちらも不明 → UNKNOWN／CACHE の `--fix-cache` 併記条件 |
+| 無受信の延長 | 1 回目 0 件 → 2 回目を計測し、2 回目で届けば RX_OK。2 回とも 0 件でも 3 回目はしない |
 | 要約行 | NG・注意の件数、全部 OK のとき |
 | 受信集計 | アドレス別件数・型タグ・経路・件数/秒、トラッキング成分の min/max、`/avatar/change` の値を保持しない、VRMode の最後の値 |
 | 伏せ字 | `usr_` / `avtr_` / `wrld_` / `C:\Users\名前\`（大文字小文字、スラッシュ、日本語名） |
@@ -38,7 +40,8 @@
 |---|---|
 | 固定ポート受信 | FakeVRChat を固定ポートへ向けてパラメータと head pose を送る → RX_OK（経路=固定）、TRACKING_OK、件数/秒 |
 | OSCQuery 受信 | 本ツールの広告 HTTP を OscQueryProbe で検査（`/avatar`・`/tracking/vrsystem`・OSC_PORT）→ FakeVRChat を OSC_PORT へ retarget して送る → 経路=OSCQuery |
-| 固定ポート使用中 | 先にテストがバインド → 受信は OSCQuery だけで続行、OUT_PORT_OTHER |
+| 固定ポート使用中 | 先にテストがバインド（SystemInfo は他プロセスの所有を返す）→ 本ツールはバインドを試みず、受信は OSCQuery だけで続行、OUT_PORT_OTHER。テスト側のソケットに送った 1 件がテスト側に届く（横取りしていない） |
+| VRChat の OSCQuery 探索（直接 HTTP） | Browser は空を返し、FakeVRChatQuery の HTTP ポートを `--oscquery-port` に指定 → OQ_FOUND_DIRECT |
 | VRChat の OSCQuery 探索（HTTP） | FakeVRChatQuery の HTTP を直接指定して HOST_INFO を読む → OQ_FOUND、受信ポート |
 | VRChat の OSCQuery 探索（mDNS） | FakeVRChatQuery を実 zeroconf で広告 → 実 Browser で発見。**この環境で mDNS が使えなければ skip**（skip 理由を表示） |
 | 無受信 | 何も送らない → RX_NONE / RX_NONE_OQ（Facts の組み合わせで） |
