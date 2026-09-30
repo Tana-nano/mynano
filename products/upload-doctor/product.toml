@@ -5,7 +5,7 @@ name = "upload-doctor"
 display_name = "アップロードドクター for VRChat"
 version = "0.1.0"              # SemVer。出品ごとに上げる
 kind = "pc-app"                # pc-app | blender-addon | seller-tool | other
-price_jpy = 0                  # 無料（ブースト任意）。仮置き: 企画の論点 1 で確認中。根拠: docs/market/system-tool-candidates-2-2026-09.md
+price_jpy = 0                  # 無料（ブースト任意）。決定済み（企画 論点 1）。根拠: docs/market/system-tool-candidates-2-2026-09.md
 entry = "src/upload_doctor/__main__.py"
 package = "upload_doctor"
 
