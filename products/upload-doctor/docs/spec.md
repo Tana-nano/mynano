@@ -2,6 +2,8 @@
 
 レビュー: 2026-09-30（Editor.log が別プロジェクト・過去のものである可能性への対処、エラーの重複排除、`Library/PackageCache` 由来の分類、Unity 側 `Packages/manifest.json` の破損、不足型のヒント表、伏せ字のパス正規化、自己診断の一時フォルダを追記）
 
+実装反映: 2026-09-30（下記「実装時の決定」参照。規則表の項目、コンパイルエラーの正規表現、追加の判定 ID、伏せ字の範囲）
+
 作成日: 2026-09-30 / 企画: `docs/concept.md` / 市場調査: `docs/market/system-tool-candidates-2-2026-09.md`
 
 ## 概要
@@ -32,7 +34,7 @@ Unity で VRChat のアバターを上げようとして失敗したとき、Uni
 
 ### プロジェクトフォルダ
 
-指定方法（優先順）: ① コマンドラインの位置引数 `PROJECT`（フォルダを exe にドラッグ＆ドロップすると渡される） ② 引数なしで起動した場合は「Unity プロジェクトのフォルダをここにドラッグして Enter」と表示して 1 行入力（コンソールにフォルダをドロップするとパスが貼られる。前後の `"` は除去）。
+指定方法（優先順）: ① コマンドラインの位置引数 `PROJECT`（フォルダを exe にドラッグ＆ドロップすると渡される） ② 引数なしで起動した場合は「Unity プロジェクトのフォルダをここにドラッグして Enter」と表示して 1 行入力（コンソールにフォルダをドロップするとパスが貼られる。前後の `"` `'` と、PowerShell が付ける先頭の `& ` は除去）。
 
 Unity プロジェクトの判定: 直下に `Assets/` と `ProjectSettings/` がある。無ければ「Unity プロジェクトのフォルダではありません」を表示し、**直下の 1 階層下**に判定を満たすフォルダがあれば「このフォルダではありませんか」と候補を出して終了コード 2。
 
@@ -51,7 +53,7 @@ Unity プロジェクトの判定: 直下に `Assets/` と `ProjectSettings/` �
 - 既定: `%LOCALAPPDATA%\Unity\Editor\Editor.log`（出典: 検索要約 https://docs.unity3d.com/ja/2018.4/Manual/LogFiles.html ／ Unity 公式は egress ブロック、**最新版は未確認**）。`--editor-log PATH` で変更できる（Editor-prev.log を渡す用途など）。
 - 無ければ L_NOT_FOUND（情報）で続行し、プロジェクト診断だけ行う。
 - **Editor.log は「最後に起動した Unity」のログであり、指定したプロジェクトのものとは限らず、直したあとの古いエラーも残っている。** そのため:
-  - ログの先頭付近（最初の 200 行）から `-projectPath` / `-projectpath` に続くパス（`"` 囲みあり・なし）を探し、指定プロジェクトと比較する（区切り文字 `\` `/`・大文字小文字・末尾の区切りを正規化）。一致 → 「対象プロジェクト: 一致」、不一致 → L_OTHER_PROJECT（注意）を出し、**ログ由来（`L_` で始まる）候補の確からしさを全部「低」に落とす**。見つからない → 「不明」と表示し、確からしさは変えない。（Unity が起動時にコマンドライン引数をログに書くことは**未検証**。見つからなければ「不明」になるだけで、誤検知はしない）
+  - ログの先頭付近（最初の 200 行）から `-projectPath` / `-projectpath` に続くパス（`"` 囲みあり・なし。同じ行に続く場合と、`-projectpath` だけの行の次の空でない行にある場合の両方）を探し、指定プロジェクトと比較する（区切り文字 `\` `/`・大文字小文字・末尾の区切りを正規化）。一致 → 「対象プロジェクト: 一致」、不一致 → L_OTHER_PROJECT（注意）を出し、**ログ由来（`L_` で始まる）候補の確からしさを全部「低」に落とす**。見つからない → 「不明」と表示し、確からしさは変えない。（Unity が起動時にコマンドライン引数をログに書くことは**未検証**。見つからなければ「不明」になるだけで、誤検知はしない）
   - ログの更新日時が 7 日より前なら L_OLD_LOG（情報）「この Editor.log は N 日前のものです」。
   - コンパイルエラーは Unity が再コンパイルのたびに同じ行を繰り返し書くため、**(file, line, col, code) で重複を除いた件数**を「N 件（延べ M 回）」の形で出す。
   - 「ログにある＝今も出ている」ではないことを、ログ由来の候補の末尾に 1 行で必ず添える（「Unity を開いてコンソールで再確認してください」）。
@@ -60,12 +62,13 @@ Unity プロジェクトの判定: 直下に `Assets/` と `ProjectSettings/` �
 
 | 種別 | パターン | 出典 |
 |---|---|---|
-| C# コンパイルエラー | `(?P<file>(?:Assets|Packages|Library)/[^\s(]+)\((?P<line>\d+),(?P<col>\d+)\): error (?P<code>CS\d+): (?P<msg>.*)$`（行頭は固定しない。ファイルは `Assets/` `Packages/` `Library/` のどれかで始まるものだけ） | 例: `Assets/VRCSDK/SDK3/Runtime/UnityEventFilter.cs(1018,24): error CS0246: The type or namespace name 'Cinemachine' could not be found …`（検索要約 https://ask.vrchat.com/t/errors-in-unity-sdk/12433 ほか） |
+| C# コンパイルエラー | 規則表の `compile_error_regex`。初期値 `(?P<file>(?:Assets|Packages|Library)[\\/][^\r\n:]*?\.cs)\((?P<line>\d+),(?P<col>\d+)\): error (?P<code>CS\d+): (?P<msg>.*)$`（行頭は固定しない。ファイルは `Assets` `Packages` `Library` のどれかで始まる `.cs` だけ。**フォルダ名の空白・括弧を許す**。区切りは `/` と `\` の両方） | 例: `Assets/VRCSDK/SDK3/Runtime/UnityEventFilter.cs(1018,24): error CS0246: The type or namespace name 'Cinemachine' could not be found …`（検索要約 https://ask.vrchat.com/t/errors-in-unity-sdk/12433 ほか） |
 | ビルド/検証の失敗メッセージ | `Failed to build avatar`, `Avatar validation failed` | 公開質問の文言（検索要約 https://ask.vrchat.com/t/avatar-validation-failed/25422 ほか）。**完全一致でない可能性**があるので部分一致で扱う |
 | 所有者違いの ID | `Attempted to load the data for an avatar we do not own, clearing blueprint id` | 同上（https://ask.vrchat.com/t/unity-vcc-console-error-when-uploading-avatar/23286 の検索要約） |
 | アップロード UI の例外 | `NullReferenceException` の近傍 5 行以内に `CreateContentInfoGUI` | https://feedback.vrchat.com/sdk-bug-reports/p/avatar-upload-shows-successful-but-does-not-appear-on-vrchat-sdk-39x-3100 の検索要約 |
 
-- 上記の実ログでの現れ方（行頭の `[Error]` や時刻の有無など）は**未検証**。パターンは行のどこにあっても一致する部分一致で書く。
+- 上記の実ログでの現れ方（行頭の `[Error]` や時刻の有無など）は**未検証**。パターンは行のどこにあっても一致する部分一致で書く。規則表の正規表現は**大文字小文字を区別しない**。
+- `Assets` 等で始まらないパスのコンパイルエラー（`error CS####` を含むが上の正規表現に一致しない行）は「error CS####」を種類として L_UNCLASSIFIED に回す。
 - 未分類のエラー（`error CS` 以外で、`\w+(Exception|Error)\b` に一致する語を含み、かつ空白＋`at ` で始まらない行＝スタックフレームを除く）は、その語を「種類」として集計して L_UNCLASSIFIED に回す。
 
 ### 規則表 `rules.json`
@@ -78,22 +81,29 @@ Unity プロジェクトの判定: 直下に `Assets/` と `ProjectSettings/` �
   "checked_on": "2026-09-30",
   "unity": {"supported": ["2022.3.22f1"], "source": "<URL>"},
   "sdk": {"min_avatars_for_new_upload": "3.9.0", "confidence": "low", "source": "<URL>"},
+  "compile_error_regex": "<上の表の正規表現。名前付きグループ file / line / col / code / msg が必須>",
   "folder_rules": [
-    {"id": "dynamic_bone", "under": "Assets", "name_glob": "DynamicBone*", "max_depth": 2,
-     "level": "warn", "confidence": "low", "title": "…", "advice": ["…"], "source": "<URL or 解説記事>"}
+    {"id": "dynamic_bone", "under": "Assets", "name_glob": "Dynamic*Bone*", "max_depth": 2,
+     "level": "info", "confidence": "low", "title": "…", "advice": ["…"], "source": "<URL or 解説記事>"}
   ],
   "log_rules": [
     {"id": "upload.validation_failed", "regex": "Avatar validation failed",
-     "level": "warn", "confidence": "low", "title": "…", "advice": ["…"], "source": "<URL>"}
+     "level": "warn", "confidence": "low", "title": "…", "advice": ["…"], "source": "<URL>"},
+    {"id": "upload.contentinfo_nre", "regex": "CreateContentInfoGUI",
+     "near_regex": "NullReferenceException", "near_lines": 5, "…": "…"}
   ],
   "missing_type_hints": [
-    {"match": "DynamicBone", "hint": "Dynamic Bone（有料アセット）を参照するスクリプトが残っています。アセットを入れるか、そのスクリプトを削除", "confidence": "low", "source": "<URL>"}
-  ]
+    {"match": ["DynamicBone"], "exact": [], "hint": "…", "confidence": "low", "source": "<URL>"}
+  ],
+  "overrides": {"P_DYNAMIC_BONE": {"level": "warn"}, "L_UPLOAD_MSGS": {"confidence": "mid"}}
 }
 ```
 
 - `unity.supported` は 1 個以上。先頭を「推奨」として表示し、いずれかに完全一致すれば OK。
-- `missing_type_hints` は L_MISSING_TYPE の不足名に対する短いヒント（前方一致・大文字小文字無視）。初期値は `DynamicBone`, `VRC.SDK3` 系（→ SDK 未導入）, `nadena.dev.modular_avatar` / `ModularAvatar`（→ Modular Avatar 未導入）, `VRCFury`, `lilToon`, `Cinemachine`（→ Unity パッケージ `com.unity.cinemachine`）の 6 系統に限る。**全部 confidence low**。表に無い名前はヒント無しで名前だけ出す。
+- `folder_rules` の `name_glob` は大文字小文字を区別しない。`max_depth` は 1〜2（Assets 直下が 1）。`under` は `Assets` だけ。
+- `log_rules` の `near_regex` を持つ規則は、`regex` に一致した行の前後 `near_lines` 行以内に `near_regex` の行があるときだけ数える。
+- `overrides` は判定 ID（`L_UPLOAD_MSGS/<規則 ID>` は `L_UPLOAD_MSGS` でも可）ごとに `level` / `confidence` を上書きする。
+- `missing_type_hints` は L_MISSING_TYPE の不足名に対する短いヒント（`match` は前方一致、`exact` は完全一致。どちらも大文字小文字無視。上から順に最初に当たったもの）。初期値は `DynamicBone`, `VRC.SDK3` 系（→ SDK 未導入）, `nadena.dev.modular_avatar` / `ModularAvatar`（→ Modular Avatar 未導入）, `VRCFury`, `lilToon`, `Cinemachine`（→ Unity パッケージ `com.unity.cinemachine`）の 6 系統に限る。**全部 confidence low**。表に無い名前はヒント無しで名前だけ出す。
 - `level`: `ng` / `warn` / `info`。`confidence`: `high` / `mid` / `low`（下の定義）。読み込み時に検証し、不正なら終了コード 2 とどこが不正かを表示。
 - `checked_on` から 90 日を超えたら、画面とレポートに「規則表は YYYY-MM-DD 時点です。古い可能性があります」を出す（情報）。
 
@@ -132,7 +142,7 @@ Enter キーを押すと閉じます…
 
 - 状態は `NG`（アップロードや SDK パネルを妨げる）/ `注意`（原因になりうる）/ `情報` / `OK`。
 - 並べ替え: ①状態（NG > 注意 > 情報） ②確からしさ（高 > 中 > 低） ③根拠の件数が多い順 ④ID の辞書順。**OK は候補に含めず、最後に 1 行で要約**する。
-- 各候補は「タイトル」「確からしさ」「根拠（最大 3 行）」「次にすること（1〜3 行）」。低の候補には「解説記事ベースの推測です。断定はできません」を必ず付ける。
+- 各候補は「タイトル」「確からしさ」「根拠（最大 3 行）」「次にすること（1〜3 行）」。低の候補には「公式以外の情報にもとづく、または前提を確かめられない推測です。断定はできません」を必ず付ける。ただし別プロジェクトのログのために低へ下げた候補には、代わりに「別のプロジェクトのログのため、確からしさを「低」に下げています」を付ける。
 - `--verbose` で根拠を全件（上限 20 件/候補）、読んだファイル一覧、Editor.log の種類別件数も出す。
 
 ### レポート（txt）
@@ -204,6 +214,15 @@ Enter 待ちは、`--` で始まるオプションが 1 つも無く、かつ `-
 | L_UNCLASSIFIED | 未分類の `Error` / `Exception` 行が 1 件以上 | info | 種類ごとの件数と先頭行を表示。「レポートを貼って相談してください」 |
 | L_TRUNCATED | 末尾 50 MB だけ読んだ | info | — |
 | R_STALE | `checked_on` から 90 日超 | info | 最新版の配布ページを確認 |
+| P_SDK_FOUND | SDK（`Packages/com.vrchat.*` か `Assets/VRCSDK`）がある | OK | 「問題なしの項目」に版を表示 |
+| P_VPM_OK | manifest があり、欠落も版違いもない | OK | — |
+| P_SETTINGS_UNREADABLE | `ProjectSettings.asset` がバイナリ形式か開けない | info | — |
+| P_SCAN_TRUNCATED | Assets の走査を上限で打ち切った | info | — |
+| P_<規則 ID 大文字> | `folder_rules` の各規則にヒット（例 `P_DYNAMIC_BONE`） | 規則表どおり | 規則表の `advice` |
+| L_UNREADABLE | Editor.log はあるが開けない | info | Unity を終了してから再実行 |
+| L_NO_COMPILE_ERRORS | Editor.log にコンパイルエラーなし | OK | — |
+
+- `L_UPLOAD_MSGS` の判定 ID は `L_UPLOAD_MSGS/<規則 ID>`（規則ごとに 1 候補）。
 
 - 1 つの事実から複数の Finding が出てよい（例: 同じエラー群から L_COMPILE_ASSETS と L_MISSING_TYPE）。
 - `L_UPLOAD_MSGS` の初期規則（`rules.json`）:
@@ -247,10 +266,11 @@ CLI オプション（上表）と規則表 `rules.json` が全て。設定フ�
 - インターネットへの送信は一切しない。読み取りのみで、プロジェクトのファイルは 1 つも書き換えない。書くのはレポート txt だけ。
 - 他人の表示名は扱わない。
 - レポートと画面の**根拠の引用行**には次の伏せ字を通す（画面にも同じ処理を適用）:
-  - `usr_…` → `usr_xxxx`、`avtr_…` → `avtr_xxxx`、`wrld_…` → `wrld_xxxx`（`[0-9a-f-]{36}` を持つもの）
+  - `usr_…` → `usr_xxxx`、`avtr_…` → `avtr_xxxx`、`wrld_…` → `wrld_xxxx`（`_` に続く 8 文字以上の英数字・ハイフン。UUID 形式と旧形式の両方）
   - Windows のユーザー名を含むパス: 任意のドライブの `X:\Users\<名前>\` → `%USERPROFILE%\`（スラッシュ表記も）
   - 指定されたプロジェクトフォルダのフルパス → `<PROJECT>`（プロジェクト名がアバター名・本名になっていることがあるため）。Editor.log は `/` 区切りで書くため、`\` と `/` の両方・大文字小文字の違いも同じものとして置換する。**`<PROJECT>` の置換を先に、`%USERPROFILE%` の置換を後に**行う
-  - メールアドレス形式 → `<email>`
+  - メールアドレス形式 → `<email>`（最後の区切りが英字 2 文字以上のものだけ。`com.unity.ugui@1.0.0` のようなパッケージのパスは伏せない）
+- 診断の前に出すエラー（フォルダが無い、Unity プロジェクトでない）は、利用者が指定したパスを確かめられるよう**伏せずに**画面に出す（レポートは作らない）。
 - パッケージの ID とバージョンの一覧は伏せない（個人を特定しないため。README に明記）。
 
 ## ビルド
@@ -259,6 +279,12 @@ CLI オプション（上表）と規則表 `rules.json` が全て。設定フ�
 - `pyinstaller.args`: `--collect-submodules upload_doctor --collect-data upload_doctor`（`rules.json` を exe に同梱するため）。
 - `smoke.args`: `--no-pause --no-report`（CI にはプロジェクトも Editor.log も無いので「プロジェクトのフォルダでない」で終了コード 2 になってしまう）。そのため **`--self-check` を追加する**: 同梱の `rules.json` を読み込んで検証し、内蔵の最小の偽プロジェクトを一時フォルダ（`tempfile`、終了時に削除）に作って診断まで通し、終了コード 0 を返す。**これが「レポート以外に書かない」の唯一の例外**で、書く先は一時フォルダだけ。`smoke.args` は `--self-check --no-pause`。CI の合格は 0 または 1（既存の仕組みどおり）。
   - `--self-check` は隠しオプション（README には書かない。サポート用に `--version` と並べて残すのは可）。
+
+## 実装時の決定（2026-09-30）
+
+- コンパイルエラーの正規表現を規則表 `compile_error_regex` に移した（仕様の「コードに直書きしない」に合わせる）。レビュー版の `[^\s(]+` はフォルダ名の空白（例 `Assets/Dynamic Bone/…`）で一致しなかったため、空白・括弧を許す形に直した。
+- 同梱の規則表が PyInstaller の exe で読めない場合に備え、`importlib.resources` が使えないときはモジュールと同じフォルダから読む。CI の `--self-check` で確認する。
+- 追加の判定 ID（OK と情報のみ）は判定表の末尾に記載。
 
 ## 出典
 
