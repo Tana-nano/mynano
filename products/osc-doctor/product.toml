@@ -1,0 +1,28 @@
+# 商品メタデータ。products/<name>/product.toml にコピーして埋める。
+# scripts/package.py と scripts/release_check.py がこのファイルを読む。
+
+[product]
+name = "osc-doctor"
+display_name = "OSCドクター for VRChat"
+version = "0.1.0"              # SemVer。出品ごとに上げる
+kind = "pc-app"                # pc-app | blender-addon | seller-tool | other
+price_jpy = 0                  # 無料（ブースト任意）。根拠: docs/market/osc-diagnostic-tool-2026-09.md
+entry = "src/osc_doctor/__main__.py"
+package = "osc_doctor"
+
+[support]
+pc_vr = true
+desktop = true
+quest_standalone = false       # PC アプリは必ず false。README/商品説明に明記される
+windows_min = "10"
+requires = ["VRChat (OSC 有効)"]
+
+[deps]
+# 実行時に同梱される Python ライブラリと、そのライセンス。他者アセットはここに書かない（同梱禁止）。
+python-osc = "Unlicense"
+zeroconf = "LGPL-2.1-or-later"
+psutil = "BSD-3-Clause"
+
+[dist]
+include = ["README.md", "EULA.md", "CHANGELOG.md", "THIRD_PARTY.md", "src/", "requirements.txt"]
+exclude = ["tests/", "docs/", "dist/", "__pycache__/"]

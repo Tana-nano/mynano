@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+testpaths = ["shared", "scripts", "products"]
+pythonpath = ["shared"]
+addopts = "-q --import-mode=importlib"
