@@ -36,12 +36,19 @@
 | シンボル | `ProjectSettings.asset` に `VRC_SDK_VRCSDK2` と SDK3 → P_DEFINE_SYMBOLS／SDK2 のみで SDK3 なし → 出ない／バイナリ内容 → 情報 |
 | フォルダ走査 | `Assets/DynamicBone` → ヒット／`Assets/Foo/Dynamic Bone`（2 階層下）→ ヒット／3 階層下 → ヒットしない／20,000 エントリ超で打ち切り注記／`Library/` は読まない |
 | パス | 非 ASCII のプロジェクトパス → P_PATH_NON_ASCII／`%USERPROFILE%` が非 ASCII／ASCII のみ → 出ない |
+| Editor.log の帰属・鮮度 | 先頭 200 行に `-projectPath "C:/Foo/Proj"` があり指定と一致（`\\` と `/`、大文字小文字、末尾区切りの違いを吸収）→ 一致／別パス → L_OTHER_PROJECT かつ全 `L_` 候補が low／無い → 不明で確からしさ据え置き／201 行目以降にあっても見ない／更新日時 8 日前 → L_OLD_LOG、6 日前 → 出ない |
+| 重複排除 | 同じ (file,line,col,code) が 4 回 → 「1 件（延べ 4 回）」／別の行番号は別件 |
+| UPM manifest | `Packages/manifest.json` 破損 → P_UPM_BROKEN／無い → 何も出ない |
+| P_NO_SDK の境界 | ディスクに無いが manifest に `com.vrchat.avatars` → P_VPM_MISSING_PACKAGE（ng）で P_NO_SDK は出ない／manifest にも無い → P_NO_SDK |
+| パス長 | 121 文字 → P_PATH_LONG、120 文字 → 出ない |
+| 不足型のヒント | `'DynamicBone'` → ヒント付き（low）／`'Foo.Bar'` → ヒント無し／大文字小文字違い／最大 20 個 |
+| 由来分類 | `Library/PackageCache/com.unity.x@1.0.0/...` → L_COMPILE_OTHER（PackageCache の案内）／`Packages/com.vrchat.base/...` → L_COMPILE_SDK／`Assets/VRCSDK/...` → L_COMPILE_SDK／`Assets/Foo/...` → L_COMPILE_ASSETS／行頭に `[Error] 12:34:56 ` などの前置きがあっても一致／`Assets/` で始まらないパス → 一致しない |
 | Editor.log 解析 | コンパイルエラー行の分解（file, line, col, code, msg）／`Assets/`・`Packages/`・`Assets/VRCSDK` の由来分類／CS0246・CS0234 の不足名抽出（`'…'` 内）／エラーなし → 空／行末が CRLF／不正な UTF-8 バイトで落ちない／50 MB 超は末尾のみ読み L_TRUNCATED／空ファイル |
 | Editor.log 規則 | 4 つの初期規則が合成ログで一致／一致しない行で誤検知しない（`clean` フィクスチャ）／NRE の近傍 5 行以内に `CreateContentInfoGUI` があるときだけ一致（6 行離れたら不一致） |
 | 判定 `judge` | 判定表の各行を 1 ケース以上。特に: `Assets/` 由来のエラー → L_COMPILE_ASSETS（ng・high）／SDK 由来のみ → L_COMPILE_SDK／混在で両方／未分類 → L_UNCLASSIFIED／Editor.log 無し → L_NOT_FOUND でプロジェクト診断は継続／OK 行が候補に入らない |
 | 並べ替え | NG > 注意 > 情報／同じ状態内で high > mid > low／同順位で根拠件数の多い順／最後は ID の辞書順（同じ入力で常に同じ順） |
 | 確からしさ表示 | low の候補に「解説記事ベースの推測です」が必ず付く／high と mid には付かない |
-| 伏せ字 | `usr_<uuid>` / `avtr_<uuid>` / `wrld_<uuid>`／`C:\Users\名前\`・`D:\Users\名前\`・`C:/Users/名前/`・日本語名／指定プロジェクトのフルパス → `<PROJECT>`／メールアドレス／伏せ字を適用したあと元の文字列が残らない（プロパティ的に、全フィクスチャに適用して検査） |
+| 伏せ字 | `<PROJECT>` の置換が `C:/Users/foo/Proj`（スラッシュ）・`c:\\users\\foo\\proj`（小文字）にも効く／`<PROJECT>` を先に置換するので `%USERPROFILE%\\Proj` にならない／`usr_<uuid>` / `avtr_<uuid>` / `wrld_<uuid>`／`C:\Users\名前\`・`D:\Users\名前\`・`C:/Users/名前/`・日本語名／指定プロジェクトのフルパス → `<PROJECT>`／メールアドレス／伏せ字を適用したあと元の文字列が残らない（プロパティ的に、全フィクスチャに適用して検査） |
 | レポート | UTF-8 BOM／各節の存在／引用行 200 文字・60 行の上限と「ほか N 件」／伏せ字後に元のユーザー名・プロジェクト名が含まれない／末尾の案内 1 行／パッケージ一覧が入る |
 | CLI | 位置引数あり・なし／`--version`／`--rules` 不正 → 2／プロジェクトでない → 2／NG あり → 1／NG なし → 0／Enter 待ち条件（オプションなしで待つ、`--no-pause` で待たない、`--verbose` を付けたら待たない）／`input_fn` でパス入力（`"` 付き） |
 | 読み取り専用 | 診断の前後でプロジェクトフォルダ全体のファイル一覧と更新日時・サイズが完全に同じ（書き換えていない）／レポートは `--out` にだけ書かれる |
@@ -55,6 +62,7 @@
 | アップロード失敗ログ | Blueprint ID 所有者違いの案内に Detach/Attach が含まれる |
 | VPM 不整合 | manifest にあるが実体がないパッケージ、依存欠落を検出 |
 | 通し | `cli.main([project, "--editor-log", log, "--out", tmp, "--no-pause"])` → 画面出力・レポートファイルの内容を検証（伏せ字済み） |
+| 自己診断 | `--self-check` の一時フォルダが終了後に残らない |
 | 自己診断 | `--self-check` が同梱 `rules.json` を読み、内蔵の偽プロジェクトで診断まで通して終了コード 0 |
 
 ## Windows（CI）
