@@ -17,6 +17,22 @@ SCREEN_EVIDENCE = 3
 VERBOSE_EVIDENCE = 20
 REPORT_LINE_CHARS = 200
 REPORT_EVIDENCE_LINES = 60
+WIN11_FIRST_BUILD = 22000
+
+
+def os_label(system: str | None = None, release: str | None = None, version: str | None = None) -> str:
+    """'Windows 11 (10.0.26200)'. Python 3.11 reports Windows 11 as release '10'; the build number tells them apart."""
+    system = platform.system() if system is None else system
+    if system != "Windows":
+        return platform.platform()
+    release = platform.release() if release is None else release
+    version = platform.version() if version is None else version
+    parts = version.split(".")
+    if release == "10" and len(parts) >= 3 and parts[2].isdigit() and int(parts[2]) >= WIN11_FIRST_BUILD:
+        release = "11"
+    return f"Windows {release} ({version})"
+
+
 PROMO = "作者の他のツール: VRChat の OSC が動かないときの「OSCドクター」もあります（Booth）"
 INDENT = " " * 13
 _MATCH_LABEL = {"match": "一致", "mismatch": "不一致", "unknown": "不明"}
@@ -132,7 +148,7 @@ def render_report(findings: list[Finding], pf: ProjectFacts, lf: LogFacts | None
     lines = [
         f"{DISPLAY_NAME} {VERSION} 診断レポート",
         f"実行日時: {now:%Y-%m-%d %H:%M:%S}",
-        f"Windows: {platform.platform()}",
+        f"Windows: {os_label()}",
         f"規則表: {rules.checked_on.isoformat()} 時点（{rules.origin}）",
         f"プロジェクト: {pf.root}",
         f"Unity: {pf.unity_version or '不明'}（推奨 {rules.recommended_unity}）",

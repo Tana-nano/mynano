@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ud_helpers import FIXTURES, NOW, make_project, rules_data, write_log
+import upload_doctor
 from upload_doctor import cli, selfcheck
 
 
@@ -70,7 +71,7 @@ def test_bad_rules(tmp_path):
 def test_bad_argument_and_version(tmp_path, capsys):
     assert run(["--nope"], tmp_path)[0] == 2
     assert run(["--version"], tmp_path)[0] == 0
-    assert "0.1.0" in capsys.readouterr().out
+    assert upload_doctor.VERSION in capsys.readouterr().out
 
 
 def test_report_save_failure_keeps_exit_code(tmp_path):

@@ -42,6 +42,7 @@ class ProjectFacts:
     scan_limit: int = SCAN_LIMIT
     non_ascii: list[str] = field(default_factory=list)  # "project" / "userprofile"
     path_length: int = 0
+    unity_open: bool = False
     read_files: list[str] = field(default_factory=list)
 
     @property
@@ -208,4 +209,6 @@ def collect(
     if profile and not profile.isascii():
         f.non_ascii.append("userprofile")
     f.path_length = len(str(root))
+    # UNVERIFIED: that Unity keeps Temp/UnityLockfile only while the project is open (commonly known; not in docs we could read).
+    f.unity_open = (root / "Temp" / "UnityLockfile").exists()
     return f

@@ -28,7 +28,9 @@ def compare(a: tuple[int, ...], b: tuple[int, ...]) -> int:
     return (pa > pb) - (pa < pb)
 
 
-_COMPARATOR = re.compile(r"(>=|<=|>|<|=)?\s*(\d+(?:\.\d+)*)(-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
+_COMPARATOR = re.compile(
+    r"(>=|<=|>|<|=)?\s*(\d+(?:\.\d+)*)((?:\.[xX*])+)?(-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
+)
 _PRERELEASE = re.compile(r"^\s*v?\d+(?:\.\d+)*-")
 
 
@@ -43,7 +45,7 @@ def satisfies(version: str | None, spec: str) -> bool | None:
     """Judge a VPM dependency range.
 
     Understood: 'X.Y.x' wildcards, and one or more space-separated comparators
-    ('>=1.14.7 <2.0.0-a', '>=3.7.0 <3.11.0', '3.1.4'), as seen in real VPM package.json files.
+    ('>=1.14.7 <2.0.0-a', '>=3.7.0 <3.11.0', '3.1.4', '>=3.5.2 < 3.9.X'), as seen in real VPM package.json files.
     Returns None when either side cannot be interpreted ('||', '^', '~', ...); the caller then stays silent.
     UNVERIFIED: the full VPM range grammar is not documented in sources we could read.
     """
@@ -60,11 +62,35 @@ def satisfies(version: str | None, spec: str) -> bool | None:
         m = _COMPARATOR.fullmatch(token.strip())
         if not m:
             return None
-        ok = _check(v, v_pre, m.group(1) or "=", parse_version(m.group(2)) or (), bool(m.group(3)))
-        if ok is None:
+        op, bound, wild, pre = m.group(1) or "=", parse_version(m.group(2)) or (), bool(m.group(3)), bool(m.group(4))
+        if wild and pre:
             return None
-        result = result and ok
+        for op2, bound2 in _expand_wildcard(op, bound) if wild else [(op, bound)]:
+            ok = _check(v, v_pre, op2, bound2, pre)
+            if ok is None:
+                return None
+            result = result and ok
     return result
+
+
+def _next(bound: tuple[int, ...]) -> tuple[int, ...]:
+    return bound[:-1] + (bound[-1] + 1,)
+
+
+def _expand_wildcard(op: str, bound: tuple[int, ...]) -> list[tuple[str, tuple[int, ...]]]:
+    """'<3.9.x' -> '<3.9.0'; '<=3.9.x' -> '<3.10.0'; '>3.9.x' -> '>=3.10.0'; '=3.9.x' -> '>=3.9.0 <3.10.0'.
+
+    Same reading as npm semver; seen in a real package as '>=3.5.2 < 3.9.X'.
+    """
+    if op == "<":
+        return [("<", bound)]
+    if op == ">=":
+        return [(">=", bound)]
+    if op == "<=":
+        return [("<", _next(bound))]
+    if op == ">":
+        return [(">=", _next(bound))]
+    return [(">=", bound), ("<", _next(bound))]
 
 
 def unity_major_minor(v: str) -> str:

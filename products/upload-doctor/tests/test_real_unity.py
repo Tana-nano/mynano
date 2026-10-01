@@ -7,7 +7,7 @@ full Editor.log layout on Windows.
 
 from pathlib import Path
 
-from ud_helpers import FIXTURES, TODAY, bundled_rules, ids, make_project
+from ud_helpers import FIXTURES, TODAY, bundled_rules, ids, make_project, touch_logged_files
 from upload_doctor import checks, editorlog, project
 
 HEAD = FIXTURES / "real_unity_2022.3.22f1_batchmode_unlicensed_head.txt"
@@ -35,7 +35,9 @@ def test_real_compiler_output_is_parsed():
 
 def test_real_compiler_output_drives_findings(tmp_path):
     rules = bundled_rules()
-    pf = project.collect(make_project(tmp_path / "p"), rules, {"USERPROFILE": "C:\\Users\\fixture"})
+    root = make_project(tmp_path / "p")
+    touch_logged_files(root, CSC)
+    pf = project.collect(root, rules, {"USERPROFILE": "C:\\Users\\fixture"})
     fs = ids(checks.judge(pf, editorlog.parse(CSC, rules, pf.root), rules, TODAY))
     assert (fs["L_COMPILE_ASSETS"].level, fs["L_COMPILE_ASSETS"].confidence) == ("ng", "high")
     assert fs["L_COMPILE_SDK"].level == "ng"

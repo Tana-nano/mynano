@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ud_helpers import FIXTURES, NOW, TODAY, bundled_rules, make_project
+from ud_helpers import FIXTURES, NOW, TODAY, bundled_rules, make_project, touch_logged_files
 from upload_doctor import checks, editorlog, project, report
 from upload_doctor.checks import Finding
 from upload_doctor.mask import Masker
@@ -44,6 +44,7 @@ def _diagnose(tmp_path, log_name="editor_log_compile_error.txt"):
     body = (FIXTURES / log_name).read_text(encoding="utf-8").replace("C:/Users/FixtureUser/VRC/FixtureAvatar", str(root))
     log = tmp_path / "Editor.log"
     log.write_text(body, encoding="utf-8")
+    touch_logged_files(root, log)
     pf = project.collect(root, rules, {"USERPROFILE": "C:\\Users\\fixture"})
     lf = editorlog.parse(log, rules, pf.root)
     fs = checks.judge(pf, lf, rules, TODAY)

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from ud_helpers import FIXTURES, TODAY, bundled_rules, ids, make_project, write_log
+from ud_helpers import FIXTURES, TODAY, bundled_rules, ids, make_project, touch_logged_files, write_log
 from upload_doctor import checks, editorlog, project
 from upload_doctor.checks import INFO, NG, OK, WARN, Finding, judge
 
@@ -24,7 +24,7 @@ def fixture_for(root, name, tmp_path):
         body = body.replace(fake, str(root))
     out = tmp_path / name
     out.write_text(body, encoding="utf-8")
-    return out
+    return touch_logged_files(root, out)
 
 
 def lvl(findings, fid):
@@ -133,7 +133,7 @@ def test_folder_and_path_findings(tmp_path):
     fs = ids(run(make_project(tmp_path / "p", assets_dirs=("DynamicBone",))))
     assert (fs["P_DYNAMIC_BONE"].level, fs["P_DYNAMIC_BONE"].confidence) == (INFO, "low")
     fs = ids(run(make_project(tmp_path / "日本語")))
-    assert (fs["P_PATH_NON_ASCII"].level, fs["P_PATH_NON_ASCII"].confidence) == (WARN, "low")
+    assert (fs["P_PATH_NON_ASCII"].level, fs["P_PATH_NON_ASCII"].confidence) == (INFO, "low")
     fs = ids(run(make_project(tmp_path / "s", assets_dirs=tuple(f"d{i}" for i in range(5))), scan_limit=2))
     assert fs["P_SCAN_TRUNCATED"].level == INFO
 
@@ -180,7 +180,7 @@ def test_other_project_downgrades_log_findings(tmp_path):
 
 def test_unknown_project_keeps_confidence(tmp_path):
     root = make_project(tmp_path / "p")
-    fs = ids(run(root, write_log(tmp_path / "l.log", ["Assets/A.cs(1,1): error CS0103: x"])))
+    fs = ids(run(root, touch_logged_files(root, write_log(tmp_path / "l.log", ["Assets/A.cs(1,1): error CS0103: x"]))))
     assert fs["L_COMPILE_ASSETS"].confidence == "high"
 
 

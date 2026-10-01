@@ -54,13 +54,13 @@ def main(
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 2
     try:
-        return _run(args, out, input_fn, now or datetime.now(), env)
+        return _run(args, out, input_fn, now, env)
     except KeyboardInterrupt:
         print("\n中断しました。", file=out)
         return 2
 
 
-def _run(args: argparse.Namespace, out: TextIO, input_fn: Callable[[str], str], now: datetime, env: Mapping[str, str]) -> int:
+def _run(args: argparse.Namespace, out: TextIO, input_fn: Callable[[str], str], now: datetime | None, env: Mapping[str, str]) -> int:
     if args.self_check:
         return selfcheck.run(out)
 
@@ -91,6 +91,8 @@ def _run(args: argparse.Namespace, out: TextIO, input_fn: Callable[[str], str], 
             print(f"  このフォルダではありませんか: {c.name}", file=out)
         return 2
 
+    # Taken after the prompt: a double-clicked exe may wait minutes before a folder is dropped.
+    now = now or datetime.now()
     pf = project.collect(root, rules, env)
     log_path = Path(project.clean_path_arg(args.editor_log)) if args.editor_log else paths.default_editor_log(env)
     lf = editorlog.parse(log_path, rules, pf.root)

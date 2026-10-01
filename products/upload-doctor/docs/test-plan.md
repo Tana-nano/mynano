@@ -51,6 +51,7 @@
 | 伏せ字 | `<PROJECT>` の置換が `C:/Users/foo/Proj`（スラッシュ）・`c:\\users\\foo\\proj`（小文字）にも効く／`<PROJECT>` を先に置換するので `%USERPROFILE%\\Proj` にならない／`usr_<uuid>` / `avtr_<uuid>` / `wrld_<uuid>`／`C:\Users\名前\`・`D:\Users\名前\`・`C:/Users/名前/`・日本語名／指定プロジェクトのフルパス → `<PROJECT>`／メールアドレス／伏せ字を適用したあと元の文字列が残らない（プロパティ的に、全フィクスチャに適用して検査） |
 | レポート | UTF-8 BOM／各節の存在／引用行 200 文字・60 行の上限と「ほか N 件」／伏せ字後に元のユーザー名・プロジェクト名が含まれない／末尾の案内 1 行／パッケージ一覧が入る |
 | CLI | 位置引数あり・なし／`--version`／`--rules` 不正 → 2／プロジェクトでない → 2／NG あり → 1／NG なし → 0／Enter 待ち条件（オプションなしで待つ、`--no-pause` で待たない、`--verbose` を付けたら待たない）／`input_fn` でパス入力（`"` 付き） |
+| 実機試験の再発防止（`test_field_findings.py`） | 実ログの抜粋（`real_editor_log_win_*.txt`）で `Start importing` の行・`…Error.cs` のファイル名を未分類に数えない／本物の例外（IOException、SocketException など）は数える／日本語パスの `-projectPath` が 2 行の形で「一致」／比較条件の中の `x`（`>=3.5.2 < 3.9.X` ほか 4 種の演算子）／判定できない書き方 → P_VPM_DEP_UNKNOWN／エラーのファイルが全部消えた → 低＋消えた注記、一部だけ → 高のまま行末に印／`Temp/UnityLockfile` → P_UNITY_OPEN／日本語パスは info／Windows 11 の表記／入力を待った後の時刻がレポート名と実行日時になる |
 | 読み取り専用 | 診断の前後でプロジェクトフォルダ全体のファイル一覧と更新日時・サイズが完全に同じ（書き換えていない）／レポートは `--out` にだけ書かれる |
 
 ## 結合
@@ -71,10 +72,14 @@
 
 ## 手動確認（購入者・オーナーに頼る項目。README の「既知の制限」と一致させる）
 
-- 実 Unity の `Editor.log` で、初期規則が一致するか・誤検知しないか
-- 実プロジェクトの `ProjectVersion.txt` / `ProjectSettings.asset` / `vpm-manifest.json` / `package.json` を正しく読めるか
-- ドラッグ＆ドロップ起動、日本語パスのプロジェクトでの動作
-- Unity 起動中の `Editor.log` を読めるか
+2026-10-01 の実機試験（`docs/cowork-test.md`、結果は spec.md「実機試験」）で、次は確認済み: 実プロジェクトのファイルの読み取り、`locked`、ドラッグ＆ドロップ、日本語パス、Unity 起動中の Editor.log、GUI の Unity のコンパイルエラー行、`-projectPath` の行。
+
+残る手動確認:
+
+- `upload.build_failed`・`upload.validation_failed` の規則が実ログで一致するか（アップロードの失敗が必要なため、試験では行わない）
+- SmartScreen の警告の文面と、README の手順で進めるか
+- Unity Hub から直接開いた場合に `-projectPath` が書かれるか
+- Windows 10 での動作
 
 ## 実装の順序（/vrc-build 向けの目安）
 

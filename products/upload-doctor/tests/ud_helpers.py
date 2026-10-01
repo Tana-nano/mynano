@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -89,3 +90,15 @@ def write_log(path: Path, lines: list[str] | str, project: Path | None = None) -
 
 def ids(findings) -> dict:
     return {f.id: f for f in findings}
+
+
+_LOGGED_FILE = re.compile(r"((?:Assets|Packages|Library)[\\/][^\r\n:(]*?\.cs)\(\d+,\d+\): error")
+
+
+def touch_logged_files(root: Path, log: Path) -> Path:
+    """Create every script a log's compile errors point at, so they read as still present."""
+    for m in _LOGGED_FILE.finditer(log.read_text(encoding="utf-8")):
+        f = root / m.group(1).replace("\\", "/")
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+    return log

@@ -23,7 +23,12 @@ CATEGORIES = ("assets", "sdk", "other")
 _PROJECT_INLINE = re.compile(r'-projectpath\s+(?:"([^"]+)"|(\S+))', re.IGNORECASE)
 _PROJECT_ALONE = re.compile(r"^\s*-projectpath\s*$", re.IGNORECASE)
 _QUOTED = re.compile(r"'([^']+)'")
-_UNCLASSIFIED = re.compile(r"\b(\w+(?:Exception|Error))\b")
+# A type-like word ending in Exception/Error, but not a file name such as '.../VRCApiError.cs'.
+_UNCLASSIFIED = re.compile(r"(?<![/\\\w])(\w+(?:Exception|Error))\b(?!\.\w)")
+# Asset import records ('Start importing Packages/.../IError.cs using Guid(...)') are not errors;
+# seen in a real Windows Editor.log for every script on a project's first import.
+_IMPORT_RECORD = re.compile(r"^\s*Start importing ")
+FILE_LIMIT = 200
 _BARE_CS_ERROR = re.compile(r"\berror (CS\d+)\b")
 _STACK = re.compile(r"^\s+at\s")
 
@@ -33,6 +38,7 @@ class CompileGroup:
     unique: int = 0
     total: int = 0
     samples: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)  # distinct file paths as written in the log
 
 
 @dataclass
@@ -175,6 +181,8 @@ def parse(
                         group.unique += 1
                         if len(group.samples) < SAMPLE_LIMIT:
                             group.samples.append(f"{file}({ln},{col}) error {code}: {msg}")
+                        if file not in group.files and len(group.files) < FILE_LIMIT:
+                            group.files.append(file)
                         if cat == "other":
                             if file.replace("\\", "/").casefold().startswith("library/packagecache/"):
                                 facts.packagecache = True
@@ -199,7 +207,7 @@ def parse(
                     for text in trackers[r.id].feed(i, line, main, near):
                         hit(r.id, text)
 
-                if not matched and not _STACK.match(line):
+                if not matched and not _STACK.match(line) and not _IMPORT_RECORD.match(line):
                     kind = None
                     if m := _BARE_CS_ERROR.search(line):
                         kind = f"error {m.group(1)}"

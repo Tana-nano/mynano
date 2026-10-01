@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
 
 from .editorlog import LogFacts
 from .project import ProjectFacts
@@ -23,6 +24,8 @@ LONG_PATH = 120
 LOW_NOTE = "公式以外の情報にもとづく、または前提を確かめられない推測です。断定はできません"
 LOG_NOTE = "ログにある＝今も出ているとは限りません。Unity を開いてコンソールで再確認してください"
 OTHER_PROJECT_NOTE = "別のプロジェクトのログのため、確からしさを「低」に下げています"
+GONE_NOTE = "ログにあるファイルは、今はもうありません。直した後なら、Unity で開き直してから再実行してください"
+GONE_MARK = "（このファイルは今はありません）"
 
 
 @dataclass
@@ -36,6 +39,7 @@ class Finding:
     advice: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     log_derived: bool = False
+    low_explained: bool = False  # confidence was lowered for a stated reason; skip LOW_NOTE
 
     @property
     def total(self) -> int:
@@ -150,19 +154,34 @@ def _vpm(pf: ProjectFacts) -> list[Finding]:
         if pf.vpm_expected and not missing and not drift:
             out.append(Finding("P_VPM_OK", OK, f"VCC のパッケージ {len(pf.vpm_expected)} 個が一覧と一致"))
 
-    unsatisfied = []
+    unsatisfied, unknown = [], []
     for pkg in sorted(pf.packages.values(), key=lambda p: p.id):
         for dep, spec in sorted(pkg.vpm_deps.items()):
             have = pf.packages.get(dep)
             if have is None:
                 unsatisfied.append(f"{pkg.id} は {dep} {spec} が必要ですが、入っていません")
-            elif satisfies(have.version, spec) is False:
+                continue
+            ok = satisfies(have.version, spec)
+            if ok is False:
                 unsatisfied.append(f"{pkg.id} は {dep} {spec} が必要ですが、{have.version} です")
+            elif ok is None:
+                unknown.append(f"{pkg.id} → {dep} {spec}（入っているのは {have.version or '?'}）")
     if unsatisfied:
         out.append(
             Finding(
-                "P_VPM_DEP_UNSATISFIED", WARN, f"パッケージが必要とする別のパッケージが足りません（{len(unsatisfied)} 件）", "mid",
-                unsatisfied, advice=["VCC で足りないパッケージを追加・更新してください"],
+                "P_VPM_DEP_UNSATISFIED", WARN, f"パッケージ同士のバージョンの条件が合っていません（{len(unsatisfied)} 件）", "mid",
+                unsatisfied,
+                advice=[
+                    "VCC で、条件を出している側のパッケージを最新に更新してください（新しい版で条件が直っていることがあります）",
+                    "足りないパッケージは VCC で追加してください",
+                ],
+            )
+        )
+    if unknown:
+        out.append(
+            Finding(
+                "P_VPM_DEP_UNKNOWN", INFO, f"判定できない書き方のバージョン条件があります（{len(unknown)} 件）", evidence=unknown,
+                advice=["このツールでは合っているか判定していません。気になる場合は VCC の画面で警告が出ていないか確認してください"],
             )
         )
     return out
@@ -240,7 +259,7 @@ def _folders_and_paths(pf: ProjectFacts, rules: Rules) -> list[Finding]:
             ev.append("Windows のユーザーフォルダ: %USERPROFILE%")
         out.append(
             Finding(
-                "P_PATH_NON_ASCII", WARN, "フォルダのパスに日本語などの文字が含まれています", "low", ev,
+                "P_PATH_NON_ASCII", INFO, "フォルダのパスに日本語などの文字が含まれています", "low", ev,
                 advice=[
                     "日本語のパスがエラーの原因になった例が解説記事にあります",
                     "英数字だけの名前のフォルダ（例: C:\\VRC\\MyAvatar）に移して開き直してください",
@@ -254,13 +273,36 @@ def _folders_and_paths(pf: ProjectFacts, rules: Rules) -> list[Finding]:
                 advice=["パスが長いと Windows のパス長の上限に当たり、パッケージのファイルが読めなくなる例があります（Unity フォーラムの報告）。短いパスに移すと避けられます"],
             )
         )
+    if pf.unity_open:
+        out.append(
+            Finding(
+                "P_UNITY_OPEN", INFO, "Unity でこのプロジェクトを開いている最中のようです", "low",
+                ["Temp/UnityLockfile があります"],
+                advice=["Editor.log は書き込みの途中かもしれません。エラーを直した後なら、Unity を終了してから再実行すると確実です"],
+            )
+        )
     return out
 
 
 # --- log ----------------------------------------------------------------------------
 
 
-def _log(lf: LogFacts, rules: Rules, today: date) -> list[Finding]:
+def _mark_gone(f: Finding, files: list[str], root: Path | None) -> Finding:
+    """Annotate compile errors whose file no longer exists; if none exist, the log predates a fix."""
+    if root is None or not files:
+        return f
+    gone = [x for x in files if not (root / x.replace("\\", "/")).exists()]
+    if not gone:
+        return f
+    f.evidence = [e + GONE_MARK if any(e.startswith(x + "(") for x in gone) else e for e in f.evidence]
+    if len(gone) == len(files):
+        f.confidence = "low"
+        f.low_explained = True
+        f.notes.append(GONE_NOTE)
+    return f
+
+
+def _log(lf: LogFacts, rules: Rules, today: date, root: Path | None = None) -> list[Finding]:
     if not lf.found:
         return [
             Finding(
@@ -295,26 +337,34 @@ def _log(lf: LogFacts, rules: Rules, today: date) -> list[Finding]:
     g = lf.compile["assets"]
     if g.unique:
         out.append(
-            Finding(
-                "L_COMPILE_ASSETS", NG, f"Assets 内のスクリプトがコンパイルエラーです（{counts('assets')}。SDK パネルが出ない原因になります）",
-                "high", list(g.samples), g.unique,
-                advice=[
-                    "エラーの出ているファイルがどのアセット（商品）のものか確かめ、導入手順の抜け（必要なパッケージ）を確認してください",
-                    "不要なアセットなら削除してください（先にバックアップ）",
-                ],
-                log_derived=True,
+            _mark_gone(
+                Finding(
+                    "L_COMPILE_ASSETS", NG, f"Assets 内のスクリプトがコンパイルエラーです（{counts('assets')}。SDK パネルが出ない原因になります）",
+                    "high", list(g.samples), g.unique,
+                    advice=[
+                        "エラーの出ているファイルがどのアセット（商品）のものか確かめ、導入手順の抜け（必要なパッケージ）を確認してください",
+                        "不要なアセットなら削除してください（先にバックアップ）",
+                    ],
+                    log_derived=True,
+                ),
+                g.files,
+                root,
             )
         )
     g = lf.compile["sdk"]
     if g.unique:
         out.append(
-            Finding(
-                "L_COMPILE_SDK", NG, f"VRChat SDK のスクリプトがコンパイルエラーです（{counts('sdk')}）", "mid", list(g.samples), g.unique,
-                advice=[
-                    "SDK の一部が欠けているか、必要なパッケージのバージョンが合っていません",
-                    "プロジェクトをバックアップしてから、VCC で SDK を入れ直す・更新してください",
-                ],
-                log_derived=True,
+            _mark_gone(
+                Finding(
+                    "L_COMPILE_SDK", NG, f"VRChat SDK のスクリプトがコンパイルエラーです（{counts('sdk')}）", "mid", list(g.samples), g.unique,
+                    advice=[
+                        "SDK の一部が欠けているか、必要なパッケージのバージョンが合っていません",
+                        "プロジェクトをバックアップしてから、VCC で SDK を入れ直す・更新してください",
+                    ],
+                    log_derived=True,
+                ),
+                g.files,
+                root,
             )
         )
     g = lf.compile["other"]
@@ -327,9 +377,13 @@ def _log(lf: LogFacts, rules: Rules, today: date) -> list[Finding]:
                 "Library/PackageCache のエラーは Unity 側のパッケージの不整合です。Unity を閉じて Library フォルダを削除してから開き直すか、Package Manager でリセットする対処が Unity フォーラムで案内されています"
             )
         out.append(
-            Finding(
-                "L_COMPILE_OTHER", WARN, f"パッケージのスクリプトがコンパイルエラーです（{counts('other')}）", "mid", list(g.samples), g.unique,
-                advice=advice, log_derived=True,
+            _mark_gone(
+                Finding(
+                    "L_COMPILE_OTHER", WARN, f"パッケージのスクリプトがコンパイルエラーです（{counts('other')}）", "mid", list(g.samples), g.unique,
+                    advice=advice, log_derived=True,
+                ),
+                g.files,
+                root,
             )
         )
     if lf.missing_types:
@@ -376,7 +430,7 @@ def judge(pf: ProjectFacts, lf: LogFacts | None, rules: Rules, today: date) -> l
     findings += _sdk(pf, rules)
     findings += _folders_and_paths(pf, rules)
     if lf is not None:
-        findings += _log(lf, rules, today)
+        findings += _log(lf, rules, today, pf.root)
     if today - rules.checked_on > timedelta(days=STALE_DAYS):
         findings.append(
             Finding(
@@ -399,6 +453,6 @@ def judge(pf: ProjectFacts, lf: LogFacts | None, rules: Rules, today: date) -> l
             f.notes.append(OTHER_PROJECT_NOTE)
         if f.log_derived:
             f.notes.append(LOG_NOTE)
-        if f.confidence == "low" and not downgraded:
+        if f.confidence == "low" and not downgraded and not f.low_explained:
             f.notes.append(LOW_NOTE)
     return sorted(findings, key=sort_key)

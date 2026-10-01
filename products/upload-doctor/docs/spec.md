@@ -70,6 +70,7 @@ Unity プロジェクトの判定: 直下に `Assets/` と `ProjectSettings/` �
 - 上記の実ログでの現れ方（行頭の `[Error]` や時刻の有無など）は**未検証**。パターンは行のどこにあっても一致する部分一致で書く。規則表の正規表現は**大文字小文字を区別しない**。
 - `Assets` 等で始まらないパスのコンパイルエラー（`error CS####` を含むが上の正規表現に一致しない行）は「error CS####」を種類として L_UNCLASSIFIED に回す。
 - 未分類のエラー（`error CS` 以外で、`\w+(Exception|Error)\b` に一致する語を含み、かつ空白＋`at ` で始まらない行＝スタックフレームを除く）は、その語を「種類」として集計して L_UNCLASSIFIED に回す。
+  - ただし `Start importing ` で始まる行（アセットの読み込み記録）は除く。また、語の直前が `/` `\`、直後が `.拡張子` のもの（`VRCApiError.cs` のようなファイル名）は数えない。（2026-10-01 実機試験: 新規プロジェクトで、ファイル名に Error / Exception を含むスクリプトの読み込み記録 13 行が誤検出された）
 
 ### 規則表 `rules.json`
 
@@ -148,7 +149,7 @@ Enter キーを押すと閉じます…
 ### レポート（txt）
 
 - 保存先: `ドキュメント\UploadDoctor\report-YYYYMMDD-HHMMSS.txt`（`--out <dir>` で変更、`--no-report` で保存しない）。UTF-8（BOM 付き）。
-- 内容: ツールのバージョン、実行日時、Windows のバージョン（`platform.platform()`）、規則表の日付、Unity のバージョン、`com.vrchat.*` と他の VPM パッケージの ID とバージョン一覧、Editor.log の行数・エラー件数・種別、全候補（`--verbose` 相当）。
+- 内容: ツールのバージョン、実行日時、Windows のバージョン（`Windows 11 (10.0.26200)` の形。Python 3.11 は Windows 11 を release `10` と返すため、ビルド番号 22000 以上を 11 と表示する）、規則表の日付、Unity のバージョン、`com.vrchat.*` と他の VPM パッケージの ID とバージョン一覧、Editor.log の行数・エラー件数・種別、全候補（`--verbose` 相当）。
 - **根拠の引用行**は 1 行 200 文字まで、全体で 60 行まで。超えたら「ほか N 件」。
 - 末尾に 1 行だけ作者の他のツールの案内（「VRChat の OSC が動かないときの『OSCドクター』もあります（Booth）」）。
 - 伏せ字（プライバシー参照）を必ず通す。
@@ -196,17 +197,19 @@ Enter 待ちは、`--` で始まるオプションが 1 つも無く、かつ `-
 | P_VPM_NO_MANIFEST | `vpm-manifest.json` が無く、`Packages/com.vrchat.*` はある | info | VCC 管理外のプロジェクト |
 | P_VPM_MISSING_PACKAGE | manifest の `locked`（無ければ `dependencies`）にある ID の `Packages/<id>/` が無い。**欠けているのが `com.vrchat.*` なら ng**、それ以外は warn | warn(ng) / mid | VCC で「Resolve」または開き直し（リゾルバは欠落パッケージを復元する、と VCC ドキュメントの要約） |
 | P_VPM_VERSION_DRIFT | `locked` のバージョンと `Packages/<id>/package.json` の `version` が違う | warn / low | 同上 |
-| P_VPM_DEP_UNSATISFIED | あるパッケージの `vpmDependencies` の ID が `Packages/` に無い、または版が範囲外 | warn / mid | 依存パッケージを VCC で追加・更新。範囲は `x` ワイルドカード（`3.1.x`, `3.x.x`）と、空白区切りの比較条件（`>=` `<=` `>` `<` `=`、例 `>=3.7.0 <3.11.0`）を判定する。`||` `^` `~` などは判定しない。境界と同じ数字のプレリリース版も判定しない |
+| P_VPM_DEP_UNSATISFIED | あるパッケージの `vpmDependencies` の ID が `Packages/` に無い、または版が範囲外 | warn / mid | 見出しは「パッケージ同士のバージョンの条件が合っていません」。条件を出している側を VCC で更新、足りないものは追加。範囲は `x` ワイルドカード（`3.1.x`, `3.x.x`）と、空白区切りの比較条件（`>=` `<=` `>` `<` `=`、例 `>=3.7.0 <3.11.0`。演算子と数字の間の空白も可）を判定する。比較条件の中の `x`（実例 `>=3.5.2 < 3.9.X`）は npm の semver と同じく `<3.9.x`→`<3.9.0`、`<=3.9.x`→`<3.10.0`、`>3.9.x`→`>=3.10.0`、`=3.9.x`→`>=3.9.0 <3.10.0` と読む。`||` `^` `~` などは判定しない。境界と同じ数字のプレリリース版も判定しない |
+| P_VPM_DEP_UNKNOWN | 上の判定ができない書き方の条件がある | info | 「判定していません。VCC の画面で警告を確認」。（実機試験で「判定できない書き方がある」と表示してほしいという要望） |
 | P_SDK_DUPLICATE | `Assets/VRCSDK` があり、かつ `Packages/com.vrchat.base` もある | warn / mid | 旧方式の SDK と VCC 方式の SDK が二重に入っている可能性。バックアップを取り、VCC 方式に統一（公式は VCC を推奨。sdk/index.md） |
 | P_DEFINE_SYMBOLS | `VRC_SDK_VRCSDK2` の語が `ProjectSettings.asset` にあり、SDK3 相当（`Packages/com.vrchat.avatars` か `worlds`）が入っている | warn / mid | SDK2 のシンボルが残っている。公式: 「そのプロジェクトの SDK に関係ないシンボルは消す」（sdk-troubleshooting.md）。Unity の Player Settings → Scripting Define Symbols から消す |
 | P_SDK_OLD | 導入済み `com.vrchat.avatars` の版が規則表 `sdk.min_avatars_for_new_upload` 未満 | warn / low | SDK 3.9.0 未満だと新規アバターのアップロードができない、という案内が解説記事にある。VCC で最新版に更新（バックアップ後） |
 | P_DYNAMIC_BONE | `folder_rules.dynamic_bone` にヒット | info / low | 旧 Dynamic Bone のフォルダがある。それ自体がアップロードを妨げるとは限らない（解説記事に「残っていると問題」の例がある程度）。PhysBone への置き換えは商品の指示に従う |
-| P_PATH_NON_ASCII | プロジェクトのパスか `%USERPROFILE%` に非 ASCII 文字 | warn / low | 日本語パスがエラーの原因になる例が解説記事にある。英数字のみのフォルダに移す |
+| P_PATH_NON_ASCII | プロジェクトのパスか `%USERPROFILE%` に非 ASCII 文字 | info / low | 日本語パスがエラーの原因になる例が解説記事にある。英数字のみのフォルダに移す。（2026-10-01 に warn から info へ: 実機試験で、日本語を含むパスの新規プロジェクトが Unity 2022.3.22f1 でエラーなく開けたため） |
+| P_UNITY_OPEN | `Temp/UnityLockfile` がある | info / low | Unity で開いている最中の可能性。ログが書き込み途中かもしれないので、直した後なら Unity を終了してから再実行。（Unity が開いている間だけこのファイルを置くことは一般に知られた挙動だが、公式文書では**未確認**） |
 | P_PATH_LONG | プロジェクトのフルパスが 120 文字を超える | info / low | パスが長いと `Library/PackageCache` 配下のファイルが Windows のパス長上限に当たる例がある（Unity フォーラムの報告）。短いパスに移す |
 | L_NOT_FOUND | Editor.log が無い | info | Unity を一度起動してから再実行。または `--editor-log` で指定 |
 | L_OTHER_PROJECT | ログ内の `-projectPath` が指定プロジェクトと不一致 | warn / high（事実の比較） | このログは別のプロジェクトのもの。対象プロジェクトを Unity で開き直してから再実行。以降の `L_` 候補は確からしさ「低」に落とす |
 | L_OLD_LOG | ログの更新日時が 7 日より前 | info | 対象プロジェクトを Unity で開き直してから再実行 |
-| L_COMPILE_ASSETS | `Assets/` 由来（`Assets/VRCSDK` 以外）のコンパイルエラーが 1 件以上 | ng / high | 公式: 第三者スクリプトのコンパイルエラーは SDK パネルが出ない原因（sdk-troubleshooting.md）。該当ファイルの元アセットを特定して、導入手順の抜け（依存パッケージ）を確認、または削除 |
+| L_COMPILE_ASSETS | `Assets/` 由来（`Assets/VRCSDK` 以外）のコンパイルエラーが 1 件以上 | ng / high（下の「消えたファイル」参照） | 公式: 第三者スクリプトのコンパイルエラーは SDK パネルが出ない原因（sdk-troubleshooting.md）。該当ファイルの元アセットを特定して、導入手順の抜け（依存パッケージ）を確認、または削除 |
 | L_COMPILE_SDK | `Packages/com.vrchat.*` または `Assets/VRCSDK` 由来のコンパイルエラーが 1 件以上 | ng / mid | SDK の一部が欠けている、または依存の版が合っていない。VCC で SDK を再インストール／更新（バックアップ後） |
 | L_COMPILE_OTHER | 上記以外（`Packages/` の他パッケージ、または `Library/PackageCache/` = Unity レジストリのパッケージ）由来 | warn / mid | `Packages/` なら該当パッケージの導入手順を確認。`Library/PackageCache/` なら Unity 側のパッケージの不整合で、`Library` フォルダを消して開き直す／Package Manager でリセットする対処が Unity フォーラムで案内されている（Unity 側の挙動） |
 | L_MISSING_TYPE | `CS0246` / `CS0234` のメッセージから取れた不足名（`'…'` 内）が 1 個以上 | warn / mid | 不足名の一覧（重複除去、最大 20 個）を表示。`missing_type_hints` に当たる名前にはヒント（低）を添える。当たらない名前は「その名前を提供するパッケージを入れる。どれかは商品ページの導入手順に従う」 |
@@ -223,6 +226,7 @@ Enter 待ちは、`--` で始まるオプションが 1 つも無く、かつ `-
 | L_NO_COMPILE_ERRORS | Editor.log にコンパイルエラーなし | OK | — |
 
 - `L_UPLOAD_MSGS` の判定 ID は `L_UPLOAD_MSGS/<規則 ID>`（規則ごとに 1 候補）。
+- **消えたファイル**: `L_COMPILE_*` の根拠のファイルがプロジェクト内に今は無いとき、その根拠の行末に「（このファイルは今はありません）」を付ける。グループの全ファイルが無いときは確からしさを「低」にし、「ログにあるファイルは、今はもうありません。直した後なら、Unity で開き直してから再実行してください」を添える（推測の注記は付けない）。（実機試験: エラーのスクリプトを消した直後に診断すると、古いログのまま NG・高が出た）
 
 - 1 つの事実から複数の Finding が出てよい（例: 同じエラー群から L_COMPILE_ASSETS と L_MISSING_TYPE）。
 - `L_UPLOAD_MSGS` の初期規則（`rules.json`）:
@@ -251,15 +255,14 @@ CLI オプション（上表）と規則表 `rules.json` が全て。設定フ�
 
 ## 既知の制限・未検証事項
 
-- **実際の `Editor.log` は 1 度も確認していない。** ログの規則は公開質問の断片から起こしたもので、網羅的でなく、実ログで一致しない可能性がある（**未検証**）。
-- Editor.log にコマンドライン引数（`-projectPath`）が書かれるかは**未検証**。書かれていなければ「対象プロジェクト: 不明」になる。
+- アップロード失敗のログ規則のうち、実ログで一致を確かめたのは `upload.blueprint_not_owned` と `upload.contentinfo_nre` だけ（2026-10-01）。`upload.build_failed`・`upload.validation_failed` は公開質問の断片から起こしたままで、実ログで一致しない可能性がある（**未検証**）。
+- Editor.log のコマンドライン引数（`-projectPath`）は、VCC の「Open Project」から起動した場合に書かれることを確認した。Unity Hub から直接開いた場合は**未確認**（書かれていなければ「対象プロジェクト: 不明」になるだけ）。
 - Unity を 2 つ同時に開いたとき、2 つ目がどのファイルにログを書くかは**未確認**。
-- `ProjectVersion.txt` / `ProjectSettings.asset` / `vpm-manifest.json` / `package.json` の実物の形は未確認（上の入力表）。
 - 推奨 Unity 版・SDK の仕様は変わる。規則表の日付を見て、古いときは最新の配布版に更新する。
 - 低の確からしさの候補は解説記事ベースの推測で、外れることがある。
 - シーン・プレハブ・アニメーターの中身は見ない（パラメータ容量 256 bit の検査は v0.2 候補。上限と単価は公式に記載あり）。
 - VRChat アカウント側の問題（Steam/Meta アカウントでは上げられない、信頼ランクが足りない等）は診断できない。公式: VRChat アカウントの New User 以上が必要（sdk/index.md）。
-- Windows での Editor.log の共有読み取り、日本語パスの扱い、ドラッグ＆ドロップ起動は CI では確認できない（**未検証**。CI では `smoke.args` で最後まで走ることだけ確認）。
+- Windows での Editor.log の共有読み取り、日本語パス、ドラッグ＆ドロップ起動は、2026-10-01 の実機試験（Windows 11、1 台）で確認した。それ以外の環境（Windows 10、OneDrive 配下のフォルダなど）は**未検証**。
 
 ## セキュリティ / プライバシー
 
@@ -293,6 +296,25 @@ Windows 実機と VRChat アカウントの無い環境で、次の方法で「�
 | パッケージの `vpmDependencies` | Modular Avatar・NDMF・Avatar Optimizer の `package.json`（GitHub） | 範囲は `>=1.14.7 <2.0.0-a`、`>=3.7.0 <3.11.0` のように**空白区切りの複数条件**が使われていた → 複数条件と `3.x.x` に対応。`||` などは判定しない |
 
 まだ確かめられていないもの: Windows で GUI 起動したときの Editor.log の全体（コマンドライン引数の有無、コンパイルエラーがそのまま書かれるか、アップロード失敗の文言）、`vpm-manifest.json` の `locked`、Windows 上での exe の動作。
+
+## 実機試験（2026-10-01、Windows 11 実機）
+
+手順は `docs/cowork-test.md`。オーナーの PC で、画面を操作できるエージェントとオーナーが実施した。結果の原本はオーナーの Google ドライブ（`UploadDoctor-実機試験結果.md`）。
+
+| 確認したもの | 結果 |
+|---|---|
+| exe の起動・SmartScreen | 起動した。警告は出たが文面は未記録 |
+| 画面へのドラッグ、exe へのドロップ | どちらも動いた。日本語の表示も正常（Windows ターミナル内） |
+| 既存のアバタープロジェクト（SDK 3.10.4、パッケージ 8 個） | Unity 版・SDK・パッケージ・ログの対象判定はすべて実際と一致。**依存条件 `>=3.5.2 < 3.9.X` を判定できず見逃した** → 比較条件の中の `x` に対応 |
+| 実ログのアップロード関連の行 | `Loaded data for an avatar we do not own, clearing blueprint ID` と `CreateContentInfoGUI` のスタックが規則に一致した（実ログでの初確認） |
+| 日本語を含むパスの新規プロジェクト | 落ちず、対象判定も一致。Unity もエラーなく開けた → `P_PATH_NON_ASCII` を info に。**`Start importing …/IError.cs` などの読み込み記録 13 行を未分類エラーと誤検出** → 除外 |
+| `vpm-manifest.json` の `locked` | 実物を確認（`locked.<id>.version` と `locked.<id>.dependencies`）。照合は正しく動いた |
+| Unity を開いたままの診断 | 読めた（書き込み途中のログ）→ `Temp/UnityLockfile` があれば知らせる |
+| GUI の Unity のコンパイルエラー | `Assets\UDTestBroken\Broken.cs(5,28): error CS0029: …` の形（区切りは `\`、行頭の時刻なし）で Editor.log に書かれ、NG・高で検出 |
+| Editor.log の先頭 | `COMMAND LINE ARGUMENTS:` の次に 1 行ずつ `-projectPath` とパスが並ぶ → 対象判定「一致」 |
+| その他 | レポートの実行日時が exe の起動時刻になっていた → 診断時刻に。Windows 11 が `Windows-10-…` と出ていた → 表記を修正。エラーのファイルを消した後も古いログで NG・高が出た → 「消えたファイル」の扱いを追加 |
+
+抜き出した実ログは `shared/fixtures/unity/real_editor_log_win_*.txt`（伏せ字済み）。
 
 ## 実装時の決定（2026-09-30）
 
