@@ -188,3 +188,13 @@ def test_unexpected_error_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(c, "analyze", boom)
     code, out, _ = cli(["--no-pause", str(good_zip(tmp_path))])
     assert code == 2 and "予期しないエラー" in out and "boom" in out
+
+
+def test_documents_dir_prefers_known_folder(tmp_path):
+    from upkg_precheck.cli import documents_dir
+    real = tmp_path / "OneDrive" / "ドキュメント"
+    real.mkdir(parents=True)
+    assert documents_dir({}, lambda: real) == real
+    assert documents_dir({"UPKG_PRECHECK_DOCS": str(tmp_path)}, lambda: real) == tmp_path
+    assert documents_dir({}, lambda: tmp_path / "missing") in (__import__("pathlib").Path.home() / "Documents",
+                                                             __import__("pathlib").Path.cwd())

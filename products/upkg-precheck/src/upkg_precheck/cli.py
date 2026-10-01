@@ -74,12 +74,40 @@ class Env:
     known: KnownAssets | None = None
 
 
-def documents_dir(environ: Mapping[str, str]) -> Path:
+def windows_documents() -> Path | None:
+    """The real Documents folder on Windows (follows OneDrive redirection), or None."""
+    if os.name != "nt":
+        return None
+    # UNVERIFIED: not run on Windows in development; falls back to ~/Documents on any error.
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class GUID(ctypes.Structure):
+            _fields_ = [("d1", wintypes.DWORD), ("d2", wintypes.WORD), ("d3", wintypes.WORD), ("d4", ctypes.c_ubyte * 8)]
+
+        # FOLDERID_Documents {FDD39AD0-238F-46AF-ADB4-6C85480369C7}
+        fid = GUID(0xFDD39AD0, 0x238F, 0x46AF, (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7))
+        buf = ctypes.c_wchar_p()
+        shell32 = ctypes.windll.shell32  # type: ignore[attr-defined]
+        if shell32.SHGetKnownFolderPath(ctypes.byref(fid), 0, None, ctypes.byref(buf)) != 0:
+            return None
+        try:
+            return Path(buf.value) if buf.value else None
+        finally:
+            ctypes.windll.ole32.CoTaskMemFree(buf)  # type: ignore[attr-defined]
+    except Exception:
+        return None
+
+
+def documents_dir(environ: Mapping[str, str], known_folder: Callable[[], Path | None] = windows_documents) -> Path:
     override = environ.get("UPKG_PRECHECK_DOCS")
     if override:
         return Path(override)
-    docs = Path.home() / "Documents"
-    return docs if docs.is_dir() else Path.cwd()
+    for docs in (known_folder(), Path.home() / "Documents"):
+        if docs is not None and docs.is_dir():
+            return docs
+    return Path.cwd()
 
 
 def main(argv: list[str] | None = None, env: Env | None = None) -> int:
