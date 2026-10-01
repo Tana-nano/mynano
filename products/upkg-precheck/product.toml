@@ -20,7 +20,7 @@ requires = ["Windows 10/11（Unity・VRChat は不要）"]
 
 [deps]
 # 実行時に同梱される Python ライブラリと、そのライセンス。他者アセットはここに書かない（同梱禁止）。
-# 標準ライブラリのみ。GUID 辞書の出典（lilToon / Modular Avatar / Poiyomi、いずれも MIT）は THIRD_PARTY.md に書く。
+# 標準ライブラリのみ。GUID 辞書の出典（lilToon / Poiyomi / Modular Avatar / NDMF は MIT、VRCFury は独自ライセンス）は THIRD_PARTY.md に書く。
 
 [dist]
 include = ["README.md", "EULA.md", "CHANGELOG.md", "THIRD_PARTY.md", "src/", "requirements.txt"]
