@@ -1,0 +1,1 @@
+error CS2001: Source file 'C:\UDTest\日本語フォルダ\UDテスト\Assets/UDTestBroken/Broken.cs' could not be found.

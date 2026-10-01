@@ -29,6 +29,7 @@
 
 | `unity/real_editor_log_win_2022.3.22f1_excerpt.txt` | Windows 11 の実機で、VCC の「Open Project」から GUI の Unity 2022.3.22f1 を起動したときの `Editor.log`（2026-10-01、アップロードドクターの実機試験）。先頭 40 行、`Start importing` の行 13 行、`error CS` の行 3 行を抜き出して並べた。ユーザー名は `<USER>`、ライセンスの各 ID とシリアルは `<MASKED>` に置き換えた | 実物の抜粋。行の間は省略している。`Start importing` の行は、診断レポートの 200 文字の切り詰めを通った形で受け取ったため、行末が欠けている |
 | `unity/real_editor_log_win_upload_lines.txt` | 同じ試験で、オーナーの既存アバタープロジェクトの `Editor.log`（2026-08 のアップロード作業時のもの）から、診断レポートに根拠として出た行を集めたもの | 実物の行だが、元の順序・前後の行は不明。スタックトレースの行は行頭の空白が除かれた形で受け取った |
+| `unity/real_editor_log_win_cs2001.txt` | 同じ実機で 0.1.1 の再試験（2026-10-01）のとき、試験用プロジェクトの `Editor.log` にあった 1 行。前の試験で消したスクリプトを Unity がまだ探していたときのもの | 実物の行（試験用フォルダのパスで、個人情報は含まない） |
 | `unity/template-avatar/vpm-manifest.json`, `unity/template-avatar/ProjectVersion.txt` | VRChat 公式のアバター用テンプレート https://github.com/vrchat-community/template-avatar の `Packages/vpm-manifest.json` と `ProjectSettings/ProjectVersion.txt` をそのまま | VCC で開く前の状態（`locked` なし、`dependencies` の版は `3.x.x`） |
 
 実 `Editor.log`（`%LOCALAPPDATA%\Unity\Editor\Editor.log`）を入手したら、ユーザー名・`usr_` ID・プロジェクト名を置換してここに追加し、上の合成ファイルと差し替える。
