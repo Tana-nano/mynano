@@ -1,0 +1,10 @@
+Loaded data for an avatar we do not own, clearing blueprint ID
+NullReferenceException: Object reference not set to an instance of an object
+at VRC.SDK3A.Editor.VRCSdkControlPanelAvatarBuilder+<>c.<CreateContentInfoGUI>b__100_0 (System.String selected) [0x00000] in .\Packages\com.vrchat.avatars\Editor\VRCSDK\SDK3A\VRCSdkControlPanelAvat
+Rethrow as IOException: Unable to read data from the transport connection: 既存の接続はリモート ホストに強制的に切断されました。
+SocketException: 既存の接続はリモート ホストに強制的に切断されました。
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<VRC.SDKBase.Editor.Api.VRCAvatar>:SetException (System.Exception)
+System.Threading.Tasks.Task:TrySetException (object)
+UnityEngine.Debug:LogError (object,UnityEngine.Object)
+Start importing Packages/com.vrchat.base/Runtime/VRCSDK/Plugins/UniTask/Runtime/UnityWebRequestException.cs using Guid(013a499e522703a42962a779b4d9850c) Importer(-
+Start importing Packages/com.vrchat.base/Editor/VRCSDK/Dependencies/VRChat/API/VRCApiError.cs using Guid(67fd710f3e92422eba267779143a9c5f) Importer(-1,0000000000000000000000000

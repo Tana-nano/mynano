@@ -1,0 +1,56 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to the License Client on channel: "LicenseClient-<USER>" at "2026-10-01T01:18:39.4475707Z"
+[Licensing::Client] Error: Code 10 while verifying Licensing Client signature (process Id: 144836, path: "C:/Program Files/Unity Hub/UnityLicensingClient_V1/Unity.Licensing.Client.exe")
+[Licensing::Module] Error: LicensingClient has failed validation; ignoring
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.0+aa6cfba
+  Session Id:              <MASKED>
+  Correlation Id:          <MASKED>
+  External correlation Id: <MASKED>
+  Machine Id:              <MASKED>
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-<USER>" (connect: 0.00s, validation: 0.01s, handshake: 0.07s)
+[Licensing::IpcConnector] Successfully connected to the License Notification on channel: "LicenseClient-<USER>-notifications" at "2026-10-01T01:18:39.5302888Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully updated license
+Built from '2022.3/staging' branch; Version is '2022.3.22f1 (887be4894c44) revision 8944612'; Using compiler version '192829333'; Build Type 'Release'
+OS: 'Windows 11 (10.0.26200) 64bit Professional' Language: 'ja' Physical Memory: 65461 MB
+[Licensing::Client] Successfully resolved entitlements
+[Licensing::Module] Serial number assigned to: "<MASKED>"
+BatchMode: 0, IsHumanControllingUs: 1, StartBugReporterOnCrash: 1, Is64bit: 1, IsPro: 0
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe
+-projectPath
+C:\UDTest\日本語フォルダ\UDテスト
+-accept-apiupdate
+-disable-assembly-updater
+Successfully changed project path to: C:\UDTest\日本語フォルダ\UDテスト
+C:/UDTest/日本語フォルダ/UDテスト
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+Start importing Packages/nadena.dev.ndmf/Editor/ErrorReporting/IError.cs using Guid(4e0231bdb1414281846ebc2b2b8e06ef) Importer(-1,00000000000000000000000000000000) -> (artifact id:
+Start importing Packages/nadena.dev.ndmf/Editor/ErrorReporting/InlineError.cs using Guid(24119c41e53a496997ac9f0188ae7b90) Importer(-1,00000000000000000000000000000000) -> (ar
+Start importing Packages/com.unity.test-framework/UnityEngine.TestRunner/Assertions/InvalidSignatureException.cs using Guid(9650d910fcaefb34cb45f121c1993892) Impo
+Start importing Packages/com.unity.test-framework/UnityEditor.TestRunner/CommandLineTest/SetupException.cs using Guid(63572993f2104574099a48392460b211) Importer(-1,000000000
+Start importing Packages/nadena.dev.ndmf/Editor/ErrorReporting/SimpleError.cs using Guid(10b27308224e413f8d0666166f7815b9) Importer(-1,00000000000000000000000000000000) -> (ar
+Start importing Packages/nadena.dev.ndmf/Editor/ErrorReporting/StackTraceError.cs using Guid(5b105a24e76f4588afe0517a6ecdd95a) Importer(-1,00000000000000000000000000000000)
+Start importing Packages/com.unity.test-framework/UnityEditor.TestRunner/TestRun/TestRunCanceledException.cs using Guid(1d45b9d3cf85bee4f99c1492fca8438a) Importer(
+Start importing Packages/com.unity.test-framework/UnityEngine.TestRunner/Assertions/UnexpectedLogMessageException.cs using Guid(5b2eeca598284bd4abb4a15c30df15
+Start importing Packages/com.unity.test-framework/UnityEngine.TestRunner/Assertions/UnhandledLogMessageException.cs using Guid(a8ed4063f2beecd41a234a582202f3c4
+Start importing Packages/com.unity.test-framework/UnityEngine.TestRunner/Assertions/UnityTestTimeoutException.cs using Guid(ffb335140c799c4408411d81789fb05c) Impo
+Start importing Packages/com.vrchat.base/Runtime/VRCSDK/Plugins/UniTask/Runtime/UnityWebRequestException.cs using Guid(013a499e522703a42962a779b4d9850c) Importer(-
+Start importing Packages/com.unity.collections/Unity.Collections.CodeGen/UserError.cs using Guid(2d53df25c7f81aa419ea121140c42d6b) Importer(-1,00000000000000000000000000000000)
+Start importing Packages/com.vrchat.base/Editor/VRCSDK/Dependencies/VRChat/API/VRCApiError.cs using Guid(67fd710f3e92422eba267779143a9c5f) Importer(-1,0000000000000000000000000
+Assets\UDTestBroken\Broken.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int'
+Assets\UDTestBroken\Broken.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int'
+Assets\UDTestBroken\Broken.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int'
