@@ -2,4 +2,4 @@
 
 APP_NAME = "UploadDoctor"
 DISPLAY_NAME = "アップロードドクター for VRChat"
-VERSION = "0.1.1"
+VERSION = "0.1.2"

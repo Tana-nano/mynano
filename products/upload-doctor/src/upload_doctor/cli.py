@@ -96,6 +96,8 @@ def _run(args: argparse.Namespace, out: TextIO, input_fn: Callable[[str], str], 
     pf = project.collect(root, rules, env)
     log_path = Path(project.clean_path_arg(args.editor_log)) if args.editor_log else paths.default_editor_log(env)
     lf = editorlog.parse(log_path, rules, pf.root)
+    if lf.project_match == "mismatch" and lf.log_project:
+        mask = Masker([raw, os.path.abspath(raw)], [lf.log_project])
     findings = checks.judge(pf, lf, rules, now.date())
 
     print(report.screen(findings, pf, lf, rules, mask, args.verbose), file=out)

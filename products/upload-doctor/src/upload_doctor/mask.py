@@ -27,14 +27,19 @@ class Masker:
     """Order matters: the project path first, then the user folder, so a project under
     C:\\Users\\<name>\\ becomes '<PROJECT>' and not '%USERPROFILE%\\...'."""
 
-    def __init__(self, project_paths: Iterable[str] = ()):
-        pats = {_path_pattern(p) for p in project_paths if p}
+    def __init__(self, project_paths: Iterable[str] = (), other_paths: Iterable[str] = ()):
+        """other_paths: another project the Editor.log belongs to; its name can be as personal as ours."""
+        pats: dict[str, tuple[re.Pattern[str], str]] = {}
+        for token, paths in (("<OTHER_PROJECT>", other_paths), ("<PROJECT>", project_paths)):
+            for path in paths:
+                if path and (pat := _path_pattern(path)):
+                    pats[pat.pattern.casefold()] = (pat, token)  # the target project wins on the same path
         # Longer paths first so the most specific spelling wins.
-        self._projects = sorted((p for p in pats if p), key=lambda p: -len(p.pattern))
+        self._projects = sorted(pats.values(), key=lambda pt: -len(pt[0].pattern))
 
     def __call__(self, text: str) -> str:
-        for p in self._projects:
-            text = p.sub("<PROJECT>", text)
+        for p, token in self._projects:
+            text = p.sub(token, text)
         text = _IDS.sub(lambda m: f"{m.group(1)}_xxxx", text)
         text = _USERS.sub("%USERPROFILE%", text)
         text = _HOME_POSIX.sub("~", text)

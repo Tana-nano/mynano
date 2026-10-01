@@ -158,3 +158,49 @@ def test_report_time_is_taken_after_the_prompt(tmp_path, monkeypatch):
     (rep,) = (tmp_path / "out").glob("report-*.txt")
     assert rep.name == "report-20261001-095703.txt"
     assert "実行日時: 2026-10-01 09:57:03" in rep.read_text(encoding="utf-8-sig")
+
+
+# --- 0.1.1 retest (2026-10-01) ---------------------------------------------------------
+
+CS2001 = FIXTURES / "real_editor_log_win_cs2001.txt"
+OTHER = "C:\\UDTest\\日本語フォルダ\\UDテスト"
+
+
+def test_cs2001_is_a_missing_source_not_unclassified():
+    f = editorlog.parse(CS2001, bundled_rules(), None)
+    assert f.unclassified == {} and f.compile_unique == 0
+    assert f.missing_sources == [OTHER + "\\Assets/UDTestBroken/Broken.cs"]
+
+
+def test_missing_source_finding(tmp_path):
+    root = make_project(tmp_path / "p")
+    log = write_log(tmp_path / "l.log", CS2001.read_text(encoding="utf-8"), project=root)
+    f = judge(root, log)["L_SOURCE_GONE"]
+    assert f.level == checks.INFO and f.log_derived and "Library" in f.advice[1]
+    assert "L_UNCLASSIFIED" not in judge(root, log)
+
+
+def test_other_project_lowers_every_log_derived_candidate(tmp_path):
+    root = make_project(tmp_path / "p")
+    log = write_log(tmp_path / "l.log", CS2001.read_text(encoding="utf-8") + "NullReferenceException: x\n", project=Path(OTHER))
+    fs = judge(root, log)
+    for k in ("L_SOURCE_GONE", "L_UNCLASSIFIED"):
+        assert fs[k].confidence == "low" and checks.OTHER_PROJECT_NOTE in fs[k].notes
+    assert fs["L_OTHER_PROJECT"].confidence == "high"
+
+
+def test_other_project_path_is_masked_on_screen(tmp_path):
+    root = make_project(tmp_path / "kip")
+    log = write_log(tmp_path / "Editor.log", CS2001.read_text(encoding="utf-8"), project=Path(OTHER))
+    out = io.StringIO()
+    cli.main([str(root), "--editor-log", str(log), "--no-report", "--verbose"], stdout=out, input_fn=lambda _p: "", env={})
+    text = out.getvalue()
+    assert "対象プロジェクト: 不一致" in text
+    assert "UDテスト" not in text and "<OTHER_PROJECT>\\Assets/UDTestBroken/Broken.cs" in text
+
+
+def test_masker_keeps_target_token_on_identical_paths():
+    from upload_doctor.mask import Masker
+
+    m = Masker(["C:/A/Proj"], ["c:\\a\\proj", "C:/A/Other"])
+    assert m("C:\\A\\Proj\\x C:/A/Other/y") == "<PROJECT>\\x <OTHER_PROJECT>/y"

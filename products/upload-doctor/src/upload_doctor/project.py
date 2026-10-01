@@ -209,6 +209,7 @@ def collect(
     if profile and not profile.isascii():
         f.non_ascii.append("userprofile")
     f.path_length = len(str(root))
-    # UNVERIFIED: that Unity keeps Temp/UnityLockfile only while the project is open (commonly known; not in docs we could read).
+    # Seen on Windows 11 with Unity 2022.3.22f1 (2026-10-01): present while open, Temp/ removed on File > Exit.
+    # After a crash the file may stay behind, so this is only a hint.
     f.unity_open = (root / "Temp" / "UnityLockfile").exists()
     return f

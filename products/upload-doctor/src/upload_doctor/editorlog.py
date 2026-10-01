@@ -30,6 +30,8 @@ _UNCLASSIFIED = re.compile(r"(?<![/\\\w])(\w+(?:Exception|Error))\b(?!\.\w)")
 _IMPORT_RECORD = re.compile(r"^\s*Start importing ")
 FILE_LIMIT = 200
 _BARE_CS_ERROR = re.compile(r"\berror (CS\d+)\b")
+# Seen in a real Windows Editor.log after a script was deleted while Unity still listed it.
+_SOURCE_GONE = re.compile(r"\berror CS2001: Source file '([^']+)' could not be found")
 _STACK = re.compile(r"^\s+at\s")
 
 
@@ -62,6 +64,8 @@ class LogFacts:
     missing_types: list[str] = field(default_factory=list)
     rule_hits: dict[str, RuleHit] = field(default_factory=dict)
     unclassified: dict[str, list] = field(default_factory=dict)  # kind -> [count, first line]
+    missing_sources: list[str] = field(default_factory=list)  # paths from 'error CS2001'
+    log_project: str | None = None  # the -projectPath value written at the top of the log
 
     @property
     def compile_unique(self) -> int:
@@ -209,6 +213,10 @@ def parse(
 
                 if not matched and not _STACK.match(line) and not _IMPORT_RECORD.match(line):
                     kind = None
+                    if m := _SOURCE_GONE.search(line):
+                        if m.group(1) not in facts.missing_sources and len(facts.missing_sources) < SAMPLE_LIMIT:
+                            facts.missing_sources.append(m.group(1))
+                        continue
                     if m := _BARE_CS_ERROR.search(line):
                         kind = f"error {m.group(1)}"
                     elif m := _UNCLASSIFIED.search(line):
@@ -220,6 +228,7 @@ def parse(
         facts.unreadable = True
         return facts
 
+    facts.log_project = project_arg
     if project_arg is not None and target is not None:
         facts.project_match = "match" if normalize_path(project_arg) == target else "mismatch"
     return facts

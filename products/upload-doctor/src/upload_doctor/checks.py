@@ -407,6 +407,18 @@ def _log(lf: LogFacts, rules: Rules, today: date, root: Path | None = None) -> l
                     advice=list(r.advice), log_derived=True,
                 )
             )
+    if lf.missing_sources:
+        out.append(
+            Finding(
+                "L_SOURCE_GONE", INFO, f"削除・移動されたスクリプトを Unity が探した記録があります（{len(lf.missing_sources)} 個）",
+                evidence=list(lf.missing_sources),
+                advice=[
+                    "消したり移動したりしたスクリプトなら、Unity で開き直してコンソールに同じエラーが出ないか確認してください",
+                    "開き直しても出る場合は、そのファイルを元に戻すか、Unity を閉じて Library フォルダを削除してから開き直してください（Unity フォーラムで案内されている対処）",
+                ],
+                log_derived=True,
+            )
+        )
     if lf.unclassified:
         ev = [f"{kind}: {cnt} 回（最初の行: {first}）" for kind, (cnt, first) in sorted(lf.unclassified.items(), key=lambda kv: (-kv[1][0], kv[0]))]
         out.append(
@@ -447,7 +459,7 @@ def judge(pf: ProjectFacts, lf: LogFacts | None, rules: Rules, today: date) -> l
             f.confidence = ov.get("confidence", f.confidence)
         if f.level == OK:
             continue
-        downgraded = other_project and f.id.startswith("L_") and f.id != "L_OTHER_PROJECT" and bool(f.confidence)
+        downgraded = other_project and f.log_derived
         if downgraded:
             f.confidence = "low"
             f.notes.append(OTHER_PROJECT_NOTE)
