@@ -100,6 +100,8 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 | T-P21 | 種類別件数 | prefab / マテリアル / テクスチャ / メッシュ / アニメーション / スクリプト / その他が正しい |
 | T-X01 | 2 パッケージで同 GUID・別内容 | X01（赤） |
 | T-X01n | 同 GUID・同内容 | X01 なし、X04 の共通に数える |
+| T-X04-known | 既知アセットだけのパッケージ 2 個（同じ lilToon） | X01〜X04 をどれも出さない |
+| T-X04-note | 自作 1 個＋lilToon のパッケージ 2 個 | X04 の共通 1、案内に「既知アセット…は数えていません」 |
 | T-X02/X03 | 同 GUID・別パス / 同パス・別 GUID | X02 / X03（黄） |
 | T-X-known | 既知アセットの GUID が 2 パッケージにある | X01〜X03 に出さない |
 | T-X-folder | 同じ pathname のフォルダが別 GUID で 2 パッケージにある | X03 に出さない |
@@ -139,7 +141,11 @@ spec の各コードに最低 1 つの「出る」テストと、紛らわしい
 | I01 | 正常な zip 1 個、`--out tmp` | 終了コード 0、`tmp/<名前>-<時刻>/report.txt` と `readme-draft.md` ができる |
 | I02 | 赤が出る zip | 終了コード 1 |
 | I03 | 存在しないパスだけ | 終了コード 2 |
-| I04 | フォルダを渡す | 下位の zip と unitypackage を全部調べ、横断比較する |
+| I04 | フォルダを渡す | 下位の zip と unitypackage を全部調べ、横断比較する。表示名はフォルダからの相対パス（`sub\B.zip`） |
+| I04b | 別々の下位フォルダに同名の unitypackage | `A\lilToon.unitypackage` と `B\lilToon.unitypackage` で表示し、` (2)` を付けない |
+| I04c | 2 つの zip に同名の unitypackage | `A.zip/Outfit.unitypackage` と `B.zip/Outfit.unitypackage`（入力が 2 個以上なら zip 内のパッケージに zip 名が付く） |
+| I04d | 同じファイルを 2 回渡す | 2 個目に ` (2)` |
+| I04e | フォルダに `商品.zip`（中に `商品/X.unitypackage`）と `商品\X.unitypackage` | `商品.zip/商品/X.unitypackage` と `商品\X.unitypackage` で見分けられる |
 | I05 | `--no-report --no-draft` | 何も保存しない |
 | I06 | `--max-path 0`（範囲外） | 終了コード 2 |
 | I07 | `--version` | バージョンと辞書の日付、終了コード 0 |

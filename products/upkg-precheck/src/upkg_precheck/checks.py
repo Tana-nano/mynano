@@ -369,13 +369,16 @@ def _cross(packages: list[Package], matches: dict[str, dict[str, Match | None]],
         out.append(Finding("X03", YELLOW, f"同じインポート先で ID が違うファイルが {len(x03)} 個あります",
                            ["別のアセットとして、別の名前で入る可能性があります（Unity の実際の動作は未検証）。"], x03, len(x03)))
     sets = {p.name: {e.guid for e in p.files() if matches[p.name][e.guid] is None} for p in packages}
-    common = set.intersection(*sets.values()) if sets else set()
+    if not any(sets.values()):
+        return  # only known assets (e.g. lilToon itself): nothing of the seller's own to compare
+    common = set.intersection(*sets.values())
     only = []
     for pn, s in sets.items():
         others = set().union(*(v for k, v in sets.items() if k != pn))
         only.append(f"{pn} だけにあるもの: {len(s - others)} 個")
     out.append(Finding("X04", GREEN, f"全パッケージに共通のアセット: {len(common)} 個",
-                       ["対応アバター別パッケージの差分の目安です。"], only, len(common)))
+                       ["対応アバター別パッケージの差分の目安です（lilToon などの既知アセットとフォルダは数えていません）。"],
+                       only, len(common)))
 
 
 def _zip_findings(z: ZipRecord, opts: Options, out: list[Finding]) -> None:

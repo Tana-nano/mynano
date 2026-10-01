@@ -78,7 +78,8 @@ def windows_documents() -> Path | None:
     """The real Documents folder on Windows (follows OneDrive redirection), or None."""
     if os.name != "nt":
         return None
-    # UNVERIFIED: not run on Windows in development; falls back to ~/Documents on any error.
+    # Checked on Windows 11 without OneDrive (2026-10-01).
+    # UNVERIFIED: a Documents folder redirected to OneDrive. Falls back to ~/Documents on any error.
     try:
         import ctypes
         from ctypes import wintypes
@@ -158,12 +159,12 @@ def run(argv: list[str], env: Env, say: Callable[[str], None]) -> int:
         say(m)
     limits = Limits(args.max_text_mb << 20, args.max_read_mb << 20, args.zip_depth)
     inputs: list[InputRecord] = []
-    for f in files:
-        say(f"調べています: {f.name}")
+    for f, name in files:
+        say(f"調べています: {name}")
         try:
-            inputs.append(read_input(f, limits))
+            inputs.append(read_input(f, limits, name))
         except OSError as e:
-            say(f"{f.name}: 読めませんでした（{e.strerror or e}）")
+            say(f"{name}: 読めませんでした（{e.strerror or e}）")
     if not inputs:
         say("調べられるファイルがありませんでした。")
         return 2
@@ -188,7 +189,7 @@ def run(argv: list[str], env: Env, say: Callable[[str], None]) -> int:
     now = env.now()
     environ = os.environ if env.environ is None else env.environ
     root = Path(args.out) if args.out else documents_dir(environ) / APP_NAME
-    first = next((Path(a) for a in args.paths if Path(a).is_dir() or Path(a).suffix.lower() in SUPPORTED), files[0])
+    first = next((Path(a) for a in args.paths if Path(a).is_dir() or Path(a).suffix.lower() in SUPPORTED), files[0][0])
     folder = root / run_dir_name(first, now)
     report_text = None if args.no_report else render_report(inputs, analysis, known, now, args.max_referrers)
     draft_text = None if args.no_draft else render_draft(inputs, analysis, known)

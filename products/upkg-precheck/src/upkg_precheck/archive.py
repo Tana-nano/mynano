@@ -38,7 +38,9 @@ class ZipRecord:
 
 @dataclass
 class InputRecord:
-    name: str  # file name only (never the full path: it contains the Windows user name)
+    # File name, or the path below a dropped folder ("sub\\a.zip"); never the full path,
+    # which contains the Windows user name.
+    name: str
     kind: str  # "zip" | "unitypackage"
     size: int = 0
     sha256: str = ""
@@ -53,9 +55,13 @@ class Limits:
     zip_depth: int = 2
 
 
-def expand_inputs(args: list[str]) -> tuple[list[Path], list[str]]:
-    """Files to read, and user-facing messages for skipped arguments."""
-    files: list[Path] = []
+def expand_inputs(args: list[str]) -> tuple[list[tuple[Path, str]], list[str]]:
+    """(path, display name) of files to read, and user-facing messages for skipped arguments.
+
+    Files found in a dropped folder are named by their path below that folder, so two
+    "lilToon.unitypackage" in different subfolders stay distinguishable.
+    """
+    files: list[tuple[Path, str]] = []
     messages: list[str] = []
     for a in args:
         p = Path(a)
@@ -64,10 +70,11 @@ def expand_inputs(args: list[str]) -> tuple[list[Path], list[str]]:
                            key=lambda f: f.as_posix().lower())
             if not found:
                 messages.append(f"{p.name}: zip も unitypackage も見つかりませんでした")
-            files += found
+            # Windows-only tool: show the separator the user sees in Explorer.
+            files += [(f, "\\".join(f.relative_to(p).parts)) for f in found]
         elif p.is_file():
             if p.suffix.lower() in SUPPORTED:
-                files.append(p)
+                files.append((p, p.name))
             else:
                 messages.append(f"{p.name}: 対応していない形式です（zip か unitypackage を指定してください）")
         else:
@@ -99,22 +106,23 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def read_input(path: Path, limits: Limits) -> InputRecord:
+def read_input(path: Path, limits: Limits, name: str | None = None) -> InputRecord:
+    name = name or path.name
     if path.suffix.lower() == ".unitypackage":
-        rec = InputRecord(path.name, "unitypackage")
+        rec = InputRecord(name, "unitypackage")
         with path.open("rb") as f:
-            pkg = read_unitypackage(path.name, f, max_text_bytes=limits.max_text_bytes)
+            pkg = read_unitypackage(name, f, max_text_bytes=limits.max_text_bytes)
         rec.size, rec.sha256 = pkg.size, pkg.sha256
         rec.packages.append(pkg)
         return rec
-    rec = InputRecord(path.name, "zip", size=path.stat().st_size, sha256=_sha256_file(path))
-    rec.zip = ZipRecord(path.name)
+    rec = InputRecord(name, "zip", size=path.stat().st_size, sha256=_sha256_file(path))
+    rec.zip = ZipRecord(name)
     budget = Budget(limits.max_read_bytes)
     try:
         with zipfile.ZipFile(path) as zf:
             _read_zip(zf, "", 1, rec, limits, budget)
     except (zipfile.BadZipFile, zipfile.LargeZipFile, OSError, EOFError, ValueError) as e:
-        rec.zip.broken.append(f"{path.name}（{type(e).__name__}: {e}）")
+        rec.zip.broken.append(f"{name}（{type(e).__name__}: {e}）")
     except BudgetExceeded:
         rec.zip.budget_exceeded = True
     return rec
@@ -172,7 +180,17 @@ def _read_zip(zf: zipfile.ZipFile, prefix: str, depth: int, rec: InputRecord, li
 
 
 def make_names_unique(inputs: list[InputRecord]) -> None:
-    """Package names key the analysis; give duplicates a " (2)" suffix."""
+    """Package names key the analysis and must differ.
+
+    With several inputs, packages in a zip are prefixed with the zip ("B.zip/x.unitypackage", like
+    nested zips) so they can't be mistaken for a file in a dropped folder; anything still equal
+    (the same file given twice) gets a " (2)" suffix.
+    """
+    if len(inputs) > 1:
+        for r in inputs:
+            if r.zip is not None:
+                for p in r.packages:
+                    p.name = f"{r.name}/{p.name}"
     seen: Counter[str] = Counter()
     for r in inputs:
         for p in r.packages:

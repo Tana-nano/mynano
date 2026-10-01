@@ -112,8 +112,44 @@ def test_i04_folder_input_cross_checks(tmp_path):
     (folder / "notes.txt").write_text("x")
     code, out, _ = cli(["--no-pause", "--out", str(tmp_path / "o"), str(folder)])
     assert code == 1 and "X01" in out
-    assert "調べています: A.unitypackage" in out and "調べています: B.zip" in out
+    assert "調べています: A.unitypackage" in out and "調べています: sub\\B.zip" in out
     assert run_dir(tmp_path / "o").name.startswith("Outfit-")
+    assert str(folder) not in out.split("レポート:")[0]
+
+
+def test_i04b_same_name_in_subfolders_shown_by_relative_path(tmp_path):
+    folder = tmp_path / "素材"
+    for sub in ("A", "B"):
+        (folder / sub).mkdir(parents=True)
+        (folder / sub / "lilToon.unitypackage").write_bytes(make_unitypackage([own(1, f"Assets/{sub}/t.png")]))
+    code, out, _ = cli(["--no-pause", "--no-report", "--no-draft", str(folder)])
+    assert "調べています: A\\lilToon.unitypackage" in out and "調べています: B\\lilToon.unitypackage" in out
+    assert "(2)" not in out
+
+
+def test_i04e_zip_package_and_folder_file_look_different(tmp_path):
+    folder = tmp_path / "素材"
+    (folder / "商品").mkdir(parents=True)
+    pkg = make_unitypackage([own(1, "Assets/S/t.png")])
+    (folder / "商品" / "X.unitypackage").write_bytes(pkg)
+    (folder / "商品.zip").write_bytes(make_zip({"商品/X.unitypackage": pkg}))
+    code, out, _ = cli(["--no-pause", "--no-report", "--no-draft", str(folder)])
+    assert "商品.zip/商品/X.unitypackage だけにあるもの" in out and "商品\\X.unitypackage だけにあるもの" in out
+
+
+def test_i04c_same_package_name_in_two_zips_prefixed_with_zip(tmp_path):
+    for z, sub in (("A.zip", "A"), ("B.zip", "B")):
+        (tmp_path / z).write_bytes(make_zip({"Outfit.unitypackage": make_unitypackage([own(1, f"Assets/{sub}/t.png")])}))
+    code, out, _ = cli(["--no-pause", "--no-report", "--no-draft", str(tmp_path / "A.zip"), str(tmp_path / "B.zip")])
+    assert "A.zip/Outfit.unitypackage だけにあるもの" in out and "B.zip/Outfit.unitypackage だけにあるもの" in out
+    assert "(2)" not in out
+
+
+def test_i04d_same_file_twice_gets_suffix(tmp_path):
+    f = tmp_path / "Outfit.unitypackage"
+    f.write_bytes(make_unitypackage([own(1, "Assets/S/t.png")]))
+    code, out, _ = cli(["--no-pause", "--no-report", "--no-draft", str(f), str(f)])
+    assert "Outfit.unitypackage (2) だけにあるもの: 0 個" in out
 
 
 def test_i05_no_outputs(tmp_path):

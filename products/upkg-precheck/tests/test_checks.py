@@ -226,6 +226,18 @@ def test_x_known_excluded():
     assert not {"X01", "X02", "X03"} & set(codes(a))
 
 
+def test_x04_skipped_when_only_known_assets():
+    lil = (LIL_SHADER, "Assets/lilToon/Shader/lts.shader", b"v1", None)
+    a = two([lil], [lil])
+    assert not [c for c in codes(a) if c.startswith("X")]
+
+
+def test_x04_says_known_assets_are_not_counted():
+    lil = (LIL_SHADER, "Assets/lilToon/Shader/lts.shader", b"v1", None)
+    f = only(two([own(1, f"{SHOP}/a.png"), lil], [own(1, f"{SHOP}/a.png"), lil]), "X04")
+    assert f.count == 1 and "既知アセット" in f.advice[0]
+
+
 def test_x_folders_excluded():
     a = two([(g(1), "Assets/Shop", None, None), own(2, f"{SHOP}/a.png")],
             [(g(3), "Assets/Shop", None, None), own(4, f"{SHOP}/b.png")])
