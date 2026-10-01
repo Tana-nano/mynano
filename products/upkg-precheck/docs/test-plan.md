@@ -171,7 +171,7 @@ lilToon ≥ 400、Modular Avatar ≥ 400、Poiyomi ≥ 1,500、NDMF ≥ 280、VR
 ## Windows ビルド
 
 - `smoke.args` = `--version`（終了コード 0 で合格）。
-- `pyinstaller.args` に `--collect-data upkg_precheck`（辞書 JSON を exe に入れる）。
+- `pyinstaller.args` に `--add-data src/upkg_precheck/data/known_assets.json;upkg_precheck/data`（辞書 JSON を exe に入れる。`--collect-data` では入らなかった: 2026-10-01 の CI）。test_packaging.py で指定を確かめる。
 
 ## 手動確認（README の「既知の制限」と一致させる）
 

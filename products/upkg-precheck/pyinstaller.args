@@ -1,1 +1,1 @@
---collect-data upkg_precheck
+--add-data src/upkg_precheck/data/known_assets.json;upkg_precheck/data
