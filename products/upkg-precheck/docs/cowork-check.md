@@ -18,6 +18,7 @@ Windows 用のツール「出品前チェッカー（upkg-precheck.exe）」の�
 
 1. `ダウンロード` フォルダにある `upkg-precheck-0.1.0-win64.zip`（名前が少し違う場合は `upkg-precheck` で始まる zip）を、
    `ダウンロード\検品テスト\` フォルダを作ってそこに展開してください（日本語と空白を含むパスでの動作確認を兼ねます）。
+   GitHub からダウンロードした zip は二重になっていることがあります。展開して中にもう 1 つ `upkg-precheck-0.1.0-win64.zip` があれば、それも展開して、`upkg-precheck.exe` が入ったフォルダを使ってください。
 2. 次のファイルをブラウザでダウンロードし、`ダウンロード\検品テスト\素材\` に置いてください（lilToon の公式配布物、MIT ライセンス）。
    https://github.com/lilxyzw/lilToon/releases/download/1.7.0/lilToon_1.7.0.unitypackage
 3. `ダウンロード\検品テスト\素材\テスト商品\` フォルダを作り、中に次の 2 つを置いてください。
