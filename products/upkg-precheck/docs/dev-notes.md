@@ -18,8 +18,22 @@
 | `classify.py` | 参照先の分類（内部・別パッケージ・組み込み・既知・DLL・見つからない） |
 | `archive.py` | 引数の展開、zip の読み取り（Shift_JIS の名前、入れ子、読み取り量の上限） |
 | `checks.py` | 検品項目の判定（入出力なしの純粋関数） |
-| `report.py` / `html_report.py` / `draft.py` | 画面表示（色・判定の行）・report.txt・report.html・readme-draft.md |
-| `cli.py` | コマンドライン |
+| `report.py` / `html_report.py` / `draft.py` | 画面表示（色・判定の行）・report.txt・report.html と検品の画面・readme-draft.md |
+| `pipeline.py` | 1 回の検品（読む → 判定 → 画面 → 保存）。コマンドラインと検品の画面で共通 |
+| `app.py` | 検品の画面の受け口（127.0.0.1 だけの HTTP サーバー。トークン・Host・`X-Upkg` で守る） |
+| `cli.py` | コマンドライン。マウスで使ったときは検品の画面を開く |
+
+## 検品の画面をブラウザで確かめる
+
+pytest は HTTP までしか確かめないので、見た目とスクリプトは Playwright（Node）で確かめる。
+
+```
+NODE_PATH=$(npm root -g) node tools/browser_check.mjs <出力フォルダ> <赤が出る zip> <unitypackage>
+```
+
+最初の画面（明るい・暗い・幅 400px）、ドラッグ中、「ファイルを選ぶ」での検品と結果の画面、結果の画面へのドロップ、
+対応しない形式のエラー、「フォルダを開く」を通し、スクリーンショットを出力フォルダに保存する。
+見た目を変えたら、撮る → 見て直す → 撮り直す、を崩れが無くなるまで繰り返す（2026-10-02 は 3 周）。
 
 ## 既知の制限（未検証）
 
@@ -30,3 +44,4 @@
 - X02・X03 の状況を Unity で実際にインポートしたときの動作は未検証。
 - 実際の Booth 商品で試したのは 3 個（明らかな誤検知なし）。誤検知の率は未検証。
 - Windows 実機確認（2026-10-01、Windows 11 25H2）の結果は `spec.md` の「Windows 実機確認の記録」。本物のドラッグ＆ドロップ、Enter で閉じる動作、OneDrive のドキュメントフォルダは未確認。
+- 検品の画面は Linux の Chromium でしか確かめていない。Windows の既定のブラウザで開くか、Edge・Chrome へのフォルダのドロップ、`os.startfile` でフォルダを開く動作は未検証。

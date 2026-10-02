@@ -32,3 +32,8 @@ UPKG_REAL_FIXTURE_DIR=<フォルダ> python -m pytest products/upkg-precheck/tes
 | 日付 | 結果 |
 |---|---|
 | 2026-09-30 | 合格。エントリ 370（フォルダ 18）、全ファイルが辞書の GUID に一致、出た項目は P07・P19・P21（緑）だけ |
+
+## browser_check.mjs / browser_serve.py — 検品の画面をブラウザで確かめる
+
+`browser_serve.py` が検品の画面の受け口を立て、`browser_check.mjs`（Playwright for Node）がそれを開いて操作し、
+スクリーンショットを撮ります。使い方は `docs/dev-notes.md` の「検品の画面をブラウザで確かめる」。

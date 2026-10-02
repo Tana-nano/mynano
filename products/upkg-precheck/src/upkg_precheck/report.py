@@ -107,7 +107,10 @@ def render_report(inputs: list[InputRecord], analysis: Analysis, known: KnownAss
 
 
 def run_dir_name(first_input: Path, now: datetime) -> str:
-    stem = first_input.name if first_input.is_dir() else first_input.stem
+    return run_dir_label(first_input.name if first_input.is_dir() else first_input.stem, now)
+
+
+def run_dir_label(stem: str, now: datetime) -> str:
     stem = _UNSAFE.sub("_", stem).strip(" .") or "input"
     return f"{stem}-{now:%Y%m%d-%H%M%S}"
 

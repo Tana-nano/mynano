@@ -1,4 +1,4 @@
-"""Command line: read inputs, judge, print, save report.txt and readme-draft.md."""
+"""Command line: read inputs, judge, print, save the results; the drop screen when used by mouse."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Callable, Mapping, TextIO
 
 from . import APP_NAME, DISPLAY_NAME, known as known_mod
-from .archive import SUPPORTED, InputRecord, Limits, expand_inputs, make_names_unique, read_input
-from .checks import Options, analyze, exit_code, summary, zip_counts
+from .app import App
+from .archive import SUPPORTED, Limits, expand_inputs
+from .checks import Options
 from .console import enable_color, setup_console
-from .draft import render_draft
 from .known import KnownAssets
-from .html_report import render_html
-from .report import header, render_report, run_dir_name, save, screen_lines, verdict_line
+from .pipeline import Outcome, Settings, inspect, save_outcome
+from .report import header, run_dir_name
 
 USAGE = ("使い方: 検品したい zip（または unitypackage、それらが入ったフォルダ）を、"
          "このアイコンに重ねてドロップしてください。")
@@ -75,13 +75,22 @@ class Env:
     known: KnownAssets | None = None
     color: bool | None = None  # None: decide from the real console
     open_file: Callable[[Path], None] | None = None  # None: open_in_browser
+    open_url: Callable[[str], object] | None = None  # None: open_url
 
 
 def open_in_browser(path: Path) -> None:
-    """Show report.html with the default browser (Windows only; elsewhere do nothing)."""
-    # UNVERIFIED: os.startfile with a .html file was not run on Windows in development.
+    """Show report.html (or a folder in Explorer) on Windows; elsewhere do nothing."""
+    # UNVERIFIED: os.startfile with a .html file or a folder was not run on Windows in development.
     if os.name == "nt":
         os.startfile(path)  # type: ignore[attr-defined]
+
+
+def open_url(url: str) -> None:
+    """Open the drop screen in the default browser."""
+    # UNVERIFIED: webbrowser on Windows (it uses os.startfile for the default browser).
+    import webbrowser
+
+    webbrowser.open(url)
 
 
 def windows_documents() -> Path | None:
@@ -134,20 +143,26 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         print(line, file=out, flush=True)
 
     color = env.color if env.color is not None else (env.out is None and enable_color(out))
+    apps: list[App] = []
     try:
-        code = run(argv, env, say, interactive=pause, color=color)
+        code = run(argv, env, say, interactive=pause, color=color, apps=apps)
     except Exception as e:  # last resort: never close the window with a bare traceback
         say(f"予期しないエラーが起きました: {type(e).__name__}: {e}")
         code = 2
-    if pause:
-        try:
-            env.input("\nEnter キーを押すと閉じます…")
-        except (EOFError, KeyboardInterrupt):
-            pass
+    try:
+        if pause:
+            try:
+                env.input("\n使い終わったら、Enter キーを押すと閉じます…" if apps else "\nEnter キーを押すと閉じます…")
+            except (EOFError, KeyboardInterrupt):
+                pass
+    finally:
+        for a in apps:
+            a.stop()
     return code
 
 
-def run(argv: list[str], env: Env, say: Callable[[str], None], interactive: bool = False, color: bool = False) -> int:
+def run(argv: list[str], env: Env, say: Callable[[str], None], interactive: bool = False, color: bool = False,
+        apps: list[App] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
     except ArgError as e:
@@ -161,67 +176,77 @@ def run(argv: list[str], env: Env, say: Callable[[str], None], interactive: bool
     say(header(known))
     if args.version:
         return 0
+    settings = Settings(Limits(args.max_text_mb << 20, args.max_read_mb << 20, args.zip_depth),
+                        Options(max_path=args.max_path, max_referrers=args.max_referrers, allow_exe=args.allow_exe),
+                        args.max_referrers, args.verbose, not args.no_report, not args.no_draft)
+    environ = os.environ if env.environ is None else env.environ
+    root = Path(args.out) if args.out else documents_dir(environ) / APP_NAME
+    root_label = str(root) if args.out else f"ドキュメント\\{APP_NAME}"
     if not args.paths:
+        # Double click: open the drop screen instead of explaining how to drag onto the icon.
+        if interactive and apps is not None and _serve(env, say, known, settings, root, root_label, apps, None):
+            return 0
         say(USAGE)
         return 2
 
     files, messages = expand_inputs(args.paths)
     for m in messages:
         say(m)
-    limits = Limits(args.max_text_mb << 20, args.max_read_mb << 20, args.zip_depth)
-    inputs: list[InputRecord] = []
-    for f, name in files:
-        say(f"調べています: {name}")
-        try:
-            inputs.append(read_input(f, limits, name))
-        except OSError as e:
-            say(f"{name}: 読めませんでした（{e.strerror or e}）")
-    if not inputs:
-        say("調べられるファイルがありませんでした。")
+    o = inspect(files, settings, known, say, color)
+    if o is None:
         return 2
-    make_names_unique(inputs)
-
-    opts = Options(max_path=args.max_path, max_referrers=args.max_referrers, allow_exe=args.allow_exe)
-    analysis = analyze(inputs, known, opts)
-    for r in inputs:
-        if r.zip is not None:
-            say("")
-            say(r.name)
-            say("  " + zip_counts(r.zip))
-    say("")
-    for line in screen_lines(analysis.findings, args.verbose, color):
-        say(line)
-    say("")
-    say(f"結果: {summary(analysis.findings)}")
-    say(verdict_line(analysis.findings, color))
-    code = exit_code(analysis.findings)
-
     if args.no_report and args.no_draft:
-        return code
+        return o.code
     now = env.now()
-    environ = os.environ if env.environ is None else env.environ
-    root = Path(args.out) if args.out else documents_dir(environ) / APP_NAME
     first = next((Path(a) for a in args.paths
                   if Path(a).is_dir() or (Path(a).is_file() and Path(a).suffix.lower() in SUPPORTED)), files[0][0])
     folder = root / run_dir_name(first, now)
-    report_text = None if args.no_report else render_report(inputs, analysis, known, now, args.max_referrers)
-    html_text = None if args.no_report else render_html(inputs, analysis, known, now, args.max_referrers)
-    draft_text = None if args.no_draft else render_draft(inputs, analysis, known)
     try:
-        rp, dp, hp = save(folder, report_text, draft_text, html_text)
+        save_outcome(o, settings, known, now, folder)
     except OSError as e:
         say(f"保存できませんでした: {folder}（{e.strerror or e}）")
         return 2
+    rp, dp, hp = o.saved
     if hp:
         say(f"結果のページ: {hp}")
     if rp:
         say(f"レポート: {rp}")
     if dp:
         say(f"説明書の下書き: {dp}")
-    # Drag & drop: show the readable page. Batch runs (any option given) stay quiet.
+    # Drag & drop: show the result on the drop screen, where the next file can be dropped.
+    # Batch runs (any option given) stay quiet.
     if hp and interactive:
+        if apps is not None and _serve(env, say, known, settings, root, root_label, apps, (o, now)):
+            return o.code
         try:
             (env.open_file or open_in_browser)(hp)
         except OSError as e:
             say(f"結果のページを開けませんでした（{e.strerror or e}）。上の場所から開いてください。")
-    return code
+    return o.code
+
+
+def _serve(env: Env, say: Callable[[str], None], known: KnownAssets, settings: Settings, root: Path,
+           root_label: str, apps: list[App], result: tuple[Outcome, datetime] | None) -> bool:
+    """Start the drop screen and open it in the browser; False if it could not start."""
+    app = App(known, settings, root, root_label, env.now, say, env.open_file or open_in_browser)
+    try:
+        url = app.start()
+    except OSError as e:
+        say(f"検品の画面を用意できませんでした（{e.strerror or e}）。")
+        app.stop()
+        return False
+    apps.append(app)
+    if result is not None:
+        url = app.url(app.add_result(*result))
+    say("")
+    if result is None:
+        say("ブラウザで検品の画面を開きます。調べたいファイルを、その画面にドロップしてください。")
+    else:
+        say("結果をブラウザで開きます。続けて別のファイルを調べるときは、その画面にドロップしてください。")
+    say(f"画面が開かないときは、このアドレスをブラウザに貼ってください: {url}")
+    say("この窓を閉じると、画面からは調べられなくなります。")
+    try:
+        (env.open_url or open_url)(url)
+    except Exception as e:  # the address above still works
+        say(f"ブラウザを開けませんでした（{e}）。")
+    return True

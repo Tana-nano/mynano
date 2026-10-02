@@ -93,6 +93,10 @@ python scripts/release_check.py <name> # 出品前チェック
   HOST_INFO の `OSC_PORT` を優先して確認する（実装例: `products/osc-doctor`）。
 - **実機確認の依頼文**: テスト用に作らせるフォルダ・ファイルの名前は英数字だけにする（日本語の名前は Unity で文字化けした）。
   コワークはドラッグ＆ドロップ・キー入力ができないことがあるので、同じ引数で exe を起動する .bat を代わりに使ってよいと書く。
+- **ブラウザで見せる画面**: 「AI っぽい」見た目（色付きの左線のカード、丸い件数バッジ、絵文字、グラデーション、→ の箇条書き）を避け、
+  業務ツールらしく線と余白で組む。撮る → 見て直す → 撮り直す、を Playwright で崩れが無くなるまで回す
+  （実装例: `products/upkg-precheck/tools/browser_check.mjs`）。ファイルを渡すツールは、ブラウザにドロップできる画面が喜ばれた
+  （127.0.0.1 だけで待ち受け、トークン・Host・独自ヘッダーで守る。実装例: `products/upkg-precheck/src/upkg_precheck/app.py`）。
 - **ブロックされるサイト**: booth.pm と feedback.vrchat.com は直接取得できないことがある。検索結果の要約で
   代用した場合は、そのことを調査ノートに書く。
 - **既存商品**: `vsui-log`（V睡ログ、有料）、`osc-doctor`（OSCドクター、無料・ショップの入口）。

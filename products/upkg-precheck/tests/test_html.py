@@ -1,4 +1,4 @@
-"""H01-H06: report.html, the console verdict and colours."""
+"""H01-H07: report.html, the console verdict and colours."""
 
 import io
 
@@ -27,7 +27,7 @@ def test_h02_verdict_by_worst_severity():
     red = make_unitypackage([own(1, f"{SHOP}/run.exe", b"MZ")])
     yellow = make_unitypackage([own(1, f"{SHOP}/m.mat", mat(g(90)))])
     green = make_unitypackage([own(1, f"{SHOP}/t.png", PNG)])
-    assert 'class="verdict red"' in html_of(("A", red)) and "出品前に直すものがあります" in html_of(("A", red))
+    assert 'class="verdict red"' in html_of(("A", red)) and "出品前に直すものがあります。" in html_of(("A", red))
     assert 'class="verdict yellow"' in html_of(("A", yellow))
     assert 'class="verdict green"' in html_of(("A", green)) and "問題は見つかりませんでした" in html_of(("A", green))
 
@@ -51,31 +51,39 @@ def test_h04_self_contained_and_names_only(tmp_path):
     assert "結果のページ:" in out.getvalue()
 
 
-def cli_run(argv, tmp_path, *, tty):
-    opened, out = [], io.StringIO()
+def cli_run(argv, tmp_path, *, tty, open_file=None):
+    opened, urls, out = [], [], io.StringIO()
     env = Env(out=out, now=lambda: NOW, input=lambda s: "", isatty=lambda: tty,
-              environ={"UPKG_PRECHECK_DOCS": str(tmp_path / "docs")}, open_file=opened.append)
+              environ={"UPKG_PRECHECK_DOCS": str(tmp_path / "docs")}, open_file=open_file or opened.append,
+              open_url=urls.append)
     main(argv, env)
-    return opened, out.getvalue()
+    return opened, urls, out.getvalue()
 
 
-def test_h05_opens_page_only_on_drag_and_drop(tmp_path):
+def test_h05_drag_and_drop_opens_the_result_on_the_drop_screen(tmp_path):
     z = good_zip(tmp_path)
-    opened, _ = cli_run([str(z)], tmp_path, tty=True)
-    assert len(opened) == 1 and opened[0].name == "report.html"
-    assert cli_run(["--no-pause", str(z)], tmp_path, tty=True)[0] == []
-    assert cli_run([str(z)], tmp_path, tty=False)[0] == []
-    assert cli_run(["--no-report", str(z)], tmp_path, tty=True)[0] == []
+    opened, urls, out = cli_run([str(z)], tmp_path, tty=True)
+    assert opened == [] and len(urls) == 1 and "/results/" in urls[0] and urls[0] in out
+    assert "結果をブラウザで開きます" in out
+    for argv, tty in ((["--no-pause", str(z)], True), ([str(z)], False), (["--no-report", str(z)], True)):
+        assert cli_run(argv, tmp_path, tty=tty)[:2] == ([], [])
 
 
-def test_h05b_open_failure_is_reported_not_fatal(tmp_path):
+def test_h05b_falls_back_to_the_saved_page(tmp_path, monkeypatch):
+    from upkg_precheck.app import App
+
+    def no_server(self):
+        raise OSError(98, "no port")
+
+    monkeypatch.setattr(App, "start", no_server)
+    z = good_zip(tmp_path)
+    opened, urls, out = cli_run([str(z)], tmp_path, tty=True)
+    assert urls == [] and len(opened) == 1 and opened[0].name == "report.html" and "用意できませんでした" in out
+
     def fail(path):
         raise OSError(2, "no browser")
-    out = io.StringIO()
-    env = Env(out=out, now=lambda: NOW, input=lambda s: "", isatty=lambda: True,
-              environ={"UPKG_PRECHECK_DOCS": str(tmp_path / "docs")}, open_file=fail)
-    assert main([str(good_zip(tmp_path))], env) == 0
-    assert "結果のページを開けませんでした" in out.getvalue()
+    _, _, out = cli_run([str(z)], tmp_path, tty=True, open_file=fail)
+    assert "結果のページを開けませんでした" in out
 
 
 def test_h06_colours_only_when_asked():
@@ -88,3 +96,10 @@ def test_h06_colours_only_when_asked():
     out = io.StringIO()
     main(["--no-pause", "--no-report", "--no-draft", "--version"], Env(out=out, environ={}))
     assert "\x1b[" not in out.getvalue()
+
+
+def test_h07_saved_page_has_no_drop_screen_parts():
+    data = make_unitypackage([own(1, f"{SHOP}/t.png", PNG)])
+    text = html_of(("A", data))
+    assert 'id="drop"' not in text and "data-base" not in text and "フォルダを開く" not in text
+    assert 'href="#overview"' in text and 'id="files"' in text

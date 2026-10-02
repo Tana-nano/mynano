@@ -21,7 +21,7 @@ def cli(argv, *, tty=False, environ=None):
     out = io.StringIO()
     asked = []
     env = Env(out=out, now=lambda: NOW, input=lambda s: asked.append(s) or "", isatty=lambda: tty,
-              environ=environ or {})
+              environ=environ or {}, open_url=lambda url: None)
     code = main(argv, env)
     return code, out.getvalue(), asked
 
@@ -179,8 +179,14 @@ def test_i08_pause_only_without_options_on_a_tty(tmp_path):
 
 
 def test_i09_no_args_shows_usage():
-    code, out, asked = cli([], tty=True)
-    assert code == 2 and "ドロップ" in out and asked
+    code, out, asked = cli([], tty=False)
+    assert code == 2 and "このアイコンに重ねてドロップ" in out and not asked
+
+
+def test_i09b_double_click_opens_the_drop_screen(tmp_path):
+    code, out, asked = cli([], tty=True, environ={"UPKG_PRECHECK_DOCS": str(tmp_path)})
+    assert code == 0 and "その画面にドロップしてください" in out and "http://127.0.0.1:" in out
+    assert asked and "使い終わったら" in asked[0]
 
 
 @pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="permission bits are not enforced")
@@ -216,7 +222,7 @@ def test_unsupported_file_is_skipped(tmp_path):
 
 
 def test_unexpected_error_is_reported(tmp_path, monkeypatch):
-    import upkg_precheck.cli as c
+    import upkg_precheck.pipeline as c
 
     def boom(*a, **k):
         raise RuntimeError("boom")
