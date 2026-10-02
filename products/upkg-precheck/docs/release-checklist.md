@@ -2,7 +2,7 @@
 
 ## 1. Booth に登録するファイル
 
-1. GitHub の Actions → build-windows の成功した最新の実行（コミット「Windows 実機確認の結果を反映」）を開き、
+1. GitHub の Actions → build-windows の成功した最新の実行（2026-10-02 時点では https://github.com/Tana-nano/mynano/actions/runs/36994235214 、コミット「結果を見やすく」）を開き、
    Artifacts の `upkg-precheck-0.1.0-win64` をダウンロードする。
 2. ダウンロードした zip は二重になっている。展開して出てくる **`upkg-precheck-0.1.0-win64.zip`（内側の zip）を Booth に登録する**。
    - 中身: `upkg-precheck-0.1.0-win64\` フォルダに `upkg-precheck.exe`、`_internal\`、README.md、EULA.md、CHANGELOG.md、THIRD_PARTY.md

@@ -8,7 +8,7 @@
 - 本物のドラッグ＆ドロップと Enter での終了は、操作できなければ「未実施」でよいことにした。
 
 準備（オーナー）:
-1. https://github.com/Tana-nano/mynano/actions/runs/36874177579 の Artifacts から `upkg-precheck-0.1.0-win64` をダウンロードする
+1. https://github.com/Tana-nano/mynano/actions/runs/36994235214 の Artifacts から `upkg-precheck-0.1.0-win64` をダウンロードする
    （1 回目と同じ名前なので、ブラウザが `upkg-precheck-0.1.0-win64 (1).zip` のように名前を変えることがある）。
 2. ダウンロードした zip を `ダウンロード` フォルダに置いたまま、コワークに依頼文を貼る。
 
