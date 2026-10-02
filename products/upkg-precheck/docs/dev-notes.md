@@ -18,7 +18,7 @@
 | `classify.py` | 参照先の分類（内部・別パッケージ・組み込み・既知・DLL・見つからない） |
 | `archive.py` | 引数の展開、zip の読み取り（Shift_JIS の名前、入れ子、読み取り量の上限） |
 | `checks.py` | 検品項目の判定（入出力なしの純粋関数） |
-| `report.py` / `draft.py` | 画面表示・report.txt・readme-draft.md |
+| `report.py` / `html_report.py` / `draft.py` | 画面表示（色・判定の行）・report.txt・report.html・readme-draft.md |
 | `cli.py` | コマンドライン |
 
 ## 既知の制限（未検証）

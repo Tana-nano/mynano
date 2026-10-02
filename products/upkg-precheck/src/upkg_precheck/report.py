@@ -9,10 +9,13 @@ from pathlib import Path
 from . import DISPLAY_NAME, VERSION
 from . import classify as cl
 from .archive import InputRecord
-from .checks import Analysis, Finding, human_size, kinds_text, summary
+from .checks import Analysis, Finding, human_size, kinds_text, summary, verdict
 from .known import ORDER, KnownAssets
 
 SCREEN_EXAMPLES = 3
+# ANSI colors for the severity tag and the verdict on a console that supports them.
+_ANSI = {"赤": "\x1b[1;37;41m", "黄": "\x1b[1;30;43m", "緑": "\x1b[1;37;42m"}
+_RESET = "\x1b[0m"
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
@@ -33,11 +36,26 @@ def finding_lines(f: Finding, limit: int | None) -> list[str]:
     return lines
 
 
-def screen_lines(findings: list[Finding], verbose: bool) -> list[str]:
+def screen_lines(findings: list[Finding], verbose: bool, color: bool = False) -> list[str]:
     out: list[str] = []
     for f in findings:
-        out += finding_lines(f, None if verbose else SCREEN_EXAMPLES)
+        lines = finding_lines(f, None if verbose else SCREEN_EXAMPLES)
+        if color:
+            tag = f"[{f.severity}]"
+            lines[0] = _ANSI[f.severity] + tag + _RESET + lines[0][len(tag):]
+        if out:
+            out.append("")  # a blank line between findings
+        out += lines
     return out
+
+
+def verdict_line(findings: list[Finding], color: bool = False) -> str:
+    """The closing line: what to do now, in the colour of the worst finding."""
+    text = f"【{verdict(findings)}】"
+    if not color:
+        return text
+    sev = next((s for s in ("赤", "黄") if any(f.severity == s for f in findings)), "緑")
+    return _ANSI[sev] + text + _RESET
 
 
 def render_report(inputs: list[InputRecord], analysis: Analysis, known: KnownAssets, now: datetime,
@@ -94,14 +112,18 @@ def run_dir_name(first_input: Path, now: datetime) -> str:
     return f"{stem}-{now:%Y%m%d-%H%M%S}"
 
 
-def save(folder: Path, report_text: str | None, draft_text: str | None) -> tuple[Path | None, Path | None]:
-    """Write report.txt (UTF-8 with BOM, for Notepad) and readme-draft.md (UTF-8)."""
+def save(folder: Path, report_text: str | None, draft_text: str | None,
+         html_text: str | None = None) -> tuple[Path | None, Path | None, Path | None]:
+    """Write report.txt (UTF-8 with BOM, for Notepad), report.html and readme-draft.md (UTF-8)."""
     folder.mkdir(parents=True, exist_ok=True)
-    rp = dp = None
+    rp = dp = hp = None
     if report_text is not None:
         rp = folder / "report.txt"
         rp.write_text(report_text, encoding="utf-8-sig", newline="\r\n")
+    if html_text is not None:
+        hp = folder / "report.html"
+        hp.write_text(html_text, encoding="utf-8", newline="\r\n")
     if draft_text is not None:
         dp = folder / "readme-draft.md"
         dp.write_text(draft_text, encoding="utf-8", newline="\r\n")
-    return rp, dp
+    return rp, dp, hp

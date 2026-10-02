@@ -13,10 +13,11 @@ from typing import Callable, Mapping, TextIO
 from . import APP_NAME, DISPLAY_NAME, known as known_mod
 from .archive import SUPPORTED, InputRecord, Limits, expand_inputs, make_names_unique, read_input
 from .checks import Options, analyze, exit_code, summary, zip_counts
-from .console import setup_console
+from .console import enable_color, setup_console
 from .draft import render_draft
 from .known import KnownAssets
-from .report import header, render_report, run_dir_name, save, screen_lines
+from .html_report import render_html
+from .report import header, render_report, run_dir_name, save, screen_lines, verdict_line
 
 USAGE = ("使い方: 検品したい zip（または unitypackage、それらが入ったフォルダ）を、"
          "このアイコンに重ねてドロップしてください。")
@@ -48,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = _Parser(prog="upkg-precheck", description=f"{DISPLAY_NAME}: Booth に出す zip / unitypackage を出品前に検品します")
     p.add_argument("paths", nargs="*", help="zip、unitypackage、またはそれらが入ったフォルダ")
     p.add_argument("--out", help="レポートと下書きの保存先の親フォルダ（既定: ドキュメント\\UpkgPrecheck）")
-    p.add_argument("--no-report", action="store_true", help="レポートを保存しない")
+    p.add_argument("--no-report", action="store_true", help="レポート（report.txt・report.html）を保存しない")
     p.add_argument("--no-draft", action="store_true", help="説明書の下書きを保存しない")
     p.add_argument("--max-path", type=_ranged(5, 1000), default=150, help="インポート先のパスの長さの上限（既定 150）")
     p.add_argument("--max-text-mb", type=_ranged(1, 1024), default=64, help="参照を調べるファイル 1 個の上限 MB（既定 64）")
@@ -72,6 +73,15 @@ class Env:
     isatty: Callable[[], bool] = field(default=lambda: sys.stdin is not None and sys.stdin.isatty())
     environ: Mapping[str, str] | None = None
     known: KnownAssets | None = None
+    color: bool | None = None  # None: decide from the real console
+    open_file: Callable[[Path], None] | None = None  # None: open_in_browser
+
+
+def open_in_browser(path: Path) -> None:
+    """Show report.html with the default browser (Windows only; elsewhere do nothing)."""
+    # UNVERIFIED: os.startfile with a .html file was not run on Windows in development.
+    if os.name == "nt":
+        os.startfile(path)  # type: ignore[attr-defined]
 
 
 def windows_documents() -> Path | None:
@@ -123,8 +133,9 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
     def say(line: str = "") -> None:
         print(line, file=out, flush=True)
 
+    color = env.color if env.color is not None else (env.out is None and enable_color(out))
     try:
-        code = run(argv, env, say)
+        code = run(argv, env, say, interactive=pause, color=color)
     except Exception as e:  # last resort: never close the window with a bare traceback
         say(f"予期しないエラーが起きました: {type(e).__name__}: {e}")
         code = 2
@@ -136,7 +147,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
     return code
 
 
-def run(argv: list[str], env: Env, say: Callable[[str], None]) -> int:
+def run(argv: list[str], env: Env, say: Callable[[str], None], interactive: bool = False, color: bool = False) -> int:
     try:
         args = build_parser().parse_args(argv)
     except ArgError as e:
@@ -178,10 +189,11 @@ def run(argv: list[str], env: Env, say: Callable[[str], None]) -> int:
             say(r.name)
             say("  " + zip_counts(r.zip))
     say("")
-    for line in screen_lines(analysis.findings, args.verbose):
+    for line in screen_lines(analysis.findings, args.verbose, color):
         say(line)
     say("")
     say(f"結果: {summary(analysis.findings)}")
+    say(verdict_line(analysis.findings, color))
     code = exit_code(analysis.findings)
 
     if args.no_report and args.no_draft:
@@ -189,17 +201,27 @@ def run(argv: list[str], env: Env, say: Callable[[str], None]) -> int:
     now = env.now()
     environ = os.environ if env.environ is None else env.environ
     root = Path(args.out) if args.out else documents_dir(environ) / APP_NAME
-    first = next((Path(a) for a in args.paths if Path(a).is_dir() or Path(a).suffix.lower() in SUPPORTED), files[0][0])
+    first = next((Path(a) for a in args.paths
+                  if Path(a).is_dir() or (Path(a).is_file() and Path(a).suffix.lower() in SUPPORTED)), files[0][0])
     folder = root / run_dir_name(first, now)
     report_text = None if args.no_report else render_report(inputs, analysis, known, now, args.max_referrers)
+    html_text = None if args.no_report else render_html(inputs, analysis, known, now, args.max_referrers)
     draft_text = None if args.no_draft else render_draft(inputs, analysis, known)
     try:
-        rp, dp = save(folder, report_text, draft_text)
+        rp, dp, hp = save(folder, report_text, draft_text, html_text)
     except OSError as e:
         say(f"保存できませんでした: {folder}（{e.strerror or e}）")
         return 2
+    if hp:
+        say(f"結果のページ: {hp}")
     if rp:
         say(f"レポート: {rp}")
     if dp:
         say(f"説明書の下書き: {dp}")
+    # Drag & drop: show the readable page. Batch runs (any option given) stay quiet.
+    if hp and interactive:
+        try:
+            (env.open_file or open_in_browser)(hp)
+        except OSError as e:
+            say(f"結果のページを開けませんでした（{e.strerror or e}）。上の場所から開いてください。")
     return code

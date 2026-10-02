@@ -101,6 +101,16 @@ def summary(findings: list[Finding]) -> str:
     return f"赤 {c[RED]} / 黄 {c[YELLOW]} / 緑 {c[GREEN]}"
 
 
+def verdict(findings: list[Finding]) -> str:
+    """One line for the top of the screen and report.html."""
+    sev = {f.severity for f in findings}
+    if RED in sev:
+        return "出品前に直すものがあります。赤の項目を直してください。"
+    if YELLOW in sev:
+        return "直すもの（赤）はありません。黄の項目を確認してください。"
+    return "問題は見つかりませんでした。"
+
+
 def sort_findings(findings: list[Finding]) -> list[Finding]:
     return sorted(findings, key=lambda f: (_SEV_RANK[f.severity], f.code))
 

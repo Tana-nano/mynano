@@ -52,6 +52,7 @@ upkg-test\
 |---|---|---|
 | R01 | `upkg-precheck.exe --version` | `出品前チェッカー 0.1.0（辞書 2026-09-30）` と表示される |
 | R02 | `material\lilToon_1.7.0.unitypackage` を、エクスプローラーで exe のアイコンに**本物のドラッグ＆ドロップ**で重ねる。表示後に **Enter キー**を押す | 結果が表示され、Enter で窓が閉じる。どちらかが操作できなければ「未実施」とし、理由を書く |
+| R02b | R02 のとき | ブラウザで「検品結果」のページが自動で開く。黒い画面の `[緑]` などに色が付いている（Windows ターミナルか、従来の黒いコンソールかも記録）。ページの見やすさの感想 |
 | R03 | `material` フォルダごと exe に渡す | 調べたものが `lilToon_1.7.0.unitypackage`、`TestProduct.zip`、`TestProduct\lilToon_1.7.0.unitypackage` と表示される。結果の行では zip の中のものが `TestProduct.zip/TestProduct/lilToon_1.7.0.unitypackage` と表示される。`(2)` が付いた名前が**出ない** |
 | R04 | `TestProduct.zip` と `material\lilToon_1.7.0.unitypackage` を同時に exe に渡す | 両方を調べる。「全パッケージに共通のアセット」（X04）の行が**出ない**（中身が lilToon だけのため） |
 | R05 | （Unity Hub がある場合）Unity Hub で新しいプロジェクトを作る。名前 `UpkgTest`、保存先 `upkg-test\unity\`、テンプレートは 3D（Built-in）。`Assets\Test\` フォルダを作り、その中にマテリアル `TestMat` と、Cube に `TestMat` を付けたプレハブ `TestCube` を作る。`Assets\Test` を右クリック →「Export Package…」→ 全部チェックのまま「Export…」で `upkg-test\material\test-export.unitypackage` に保存。その unitypackage を exe に渡す | 出た項目のコードと 1 行目をすべて記録。赤が 0 であること。黄が出たら全文を記録 |
@@ -72,7 +73,7 @@ upkg-test\
 ...
 
 ## 画面の記録
-（R03・R05・R06 の画面のテキストをそのまま）
+（R03・R05・R06 の画面のテキストをそのまま。R02b のページはスクリーンショットがあれば添える）
 ```
 
 最後に、`result.md` の中身を全文そのまま表示してください（作業セッションに貼り戻すため）。
