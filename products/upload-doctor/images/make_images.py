@@ -26,12 +26,14 @@ NAME = "アップロードドクター for VRChat"
 PURPOSE = "アバターが上がらない原因を、Unity を開かずに診断"
 PLATFORM = "Windows PC 用（Quest 単機では使えません）"
 
-# (output name, screenshot file, with text). Only the first image carries text.
+# (output name, screenshot file, crop box (left, top, right, bottom) or None, with text).
+# Only the first image carries text. Crops drop the empty console area so the text stays legible;
+# they are tuned to the screenshots taken on 2026-10-02 (ng.png 1115x998).
 IMAGES = [
-    ("01-thumbnail.png", "ng.png", True),
-    ("02-result.png", "ng.png", False),
-    ("03-report.png", "report.png", False),
-    ("04-clean.png", "clean.png", False),
+    ("01-thumbnail.png", "ng.png", (0, 0, 1115, 541), True),
+    ("02-result.png", "ng.png", (0, 0, 1115, 600), False),
+    ("03-report.png", "report.png", None, False),
+    ("04-clean.png", "clean.png", None, False),
 ]
 
 # Noto Sans JP (SIL Open Font License), fetched once into images/.fonts/ (not committed).
@@ -81,6 +83,17 @@ def font_faces() -> str:
     return "\n".join(faces)
 
 
+def cropped(shot: Path, box: tuple[int, int, int, int] | None, tmp: Path) -> Path:
+    if box is None:
+        return shot
+    from PIL import Image  # dev-only dependency, used just for cropping
+
+    out = tmp / f"crop-{shot.stem}-{'-'.join(map(str, box))}.png"
+    with Image.open(shot) as im:
+        im.crop(box).save(out)
+    return out
+
+
 def render(page: str, dest: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "page.html"
@@ -93,13 +106,14 @@ def render(page: str, dest: Path) -> None:
 
 
 def main() -> int:
-    missing = sorted({s for _, s, _ in IMAGES if not (SCREENS / s).exists()})
+    missing = sorted({s for _, s, _, _ in IMAGES if not (SCREENS / s).exists()})
     if missing:
         print("missing screenshots in images/screens/: " + ", ".join(missing))
         return 1
     OUT.mkdir(exist_ok=True)
     faces = font_faces()
-    for out_name, shot, with_text in IMAGES:
+    tmp = Path(tempfile.mkdtemp())
+    for out_name, shot, box, with_text in IMAGES:
         title, _, suffix = NAME.partition(" for ")
         head = (
             f'<h1>{html.escape(title)}<small>for {html.escape(suffix)}</small></h1><p class="purpose">{html.escape(PURPOSE)}</p>'
@@ -107,7 +121,7 @@ def main() -> int:
         )
         foot = f'<p class="platform">{html.escape(PLATFORM)}</p>' if with_text else ""
         page = PAGE.format(faces=faces, size=SIZE, pad=56 if with_text else 40, head=head, foot=foot,
-                           img=(SCREENS / shot).as_uri())
+                           img=cropped(SCREENS / shot, box, tmp).as_uri())
         render(page, OUT / out_name)
         print(OUT / out_name)
     return 0

@@ -204,3 +204,17 @@ def test_masker_keeps_target_token_on_identical_paths():
 
     m = Masker(["C:/A/Proj"], ["c:\\a\\proj", "C:/A/Other"])
     assert m("C:\\A\\Proj\\x C:/A/Other/y") == "<PROJECT>\\x <OTHER_PROJECT>/y"
+
+
+def test_log_whose_head_was_overwritten_with_nul(tmp_path):
+    # Seen on 2026-10-02: another Unity version started briefly and left the top of Editor.log as NUL bytes.
+    root = make_project(tmp_path / "p")
+    log = tmp_path / "Editor.log"
+    log.write_bytes(b"\x00" * 50_000 + b"\nAssets/A.cs(1,1): error CS0103: x\nStart importing Packages/a/IError.cs using Guid(0)\n")
+    (root / "Assets" / "A.cs").touch()
+    f = editorlog.parse(log, bundled_rules(), root)
+    assert not f.unreadable and f.project_match == "unknown"
+    assert f.compile["assets"].unique == 1 and f.unclassified == {}
+    out = io.StringIO()
+    code = cli.main([str(root), "--editor-log", str(log), "--no-report", "--no-pause"], stdout=out, input_fn=lambda _p: "", env={})
+    assert code == 1 and "\x00" not in out.getvalue()
