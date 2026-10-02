@@ -91,6 +91,8 @@ python scripts/release_check.py <name> # 出品前チェック
   排他 bind して確かめる（実装例: `products/vsui-log/src/vsui_log/oscio.py`）。実機での効果は未検証。
 - **VRChat の OSC 受信ポートは 9000 とは限らない**: 空いていないと別のポートを使う。OSCQuery の
   HOST_INFO の `OSC_PORT` を優先して確認する（実装例: `products/osc-doctor`）。
+- **実機確認の依頼文**: テスト用に作らせるフォルダ・ファイルの名前は英数字だけにする（日本語の名前は Unity で文字化けした）。
+  コワークはドラッグ＆ドロップ・キー入力ができないことがあるので、同じ引数で exe を起動する .bat を代わりに使ってよいと書く。
 - **ブロックされるサイト**: booth.pm と feedback.vrchat.com は直接取得できないことがある。検索結果の要約で
   代用した場合は、そのことを調査ノートに書く。
 - **既存商品**: `vsui-log`（V睡ログ、有料）、`osc-doctor`（OSCドクター、無料・ショップの入口）。
