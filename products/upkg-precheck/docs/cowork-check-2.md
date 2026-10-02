@@ -9,7 +9,7 @@
 - exe をダブルクリックするとブラウザで開く「検品の画面」を足した（R07）。結果の見た目も作り直した。
 
 準備（オーナー）:
-1. https://github.com/Tana-nano/mynano/actions/runs/36994235214 の Artifacts から `upkg-precheck-0.1.0-win64` をダウンロードする
+1. https://github.com/Tana-nano/mynano/actions/runs/36997195794 の Artifacts から `upkg-precheck-0.1.0-win64` をダウンロードする
    （1 回目と同じ名前なので、ブラウザが `upkg-precheck-0.1.0-win64 (1).zip` のように名前を変えることがある）。
 2. ダウンロードした zip を `ダウンロード` フォルダに置いたまま、コワークに依頼文を貼る。
 
